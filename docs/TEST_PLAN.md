@@ -9,6 +9,8 @@
 - JWT profile access and password-hash non-disclosure.
 - Authentication requirement on learning endpoints.
 - Analysis persistence, deletion and user isolation.
+- Administrator authorization, statistics, user search and account lockout protections.
+- Cross-user analysis moderation and administrator audit logging.
 - Whitespace/input validation.
 - Alembic upgrade from an empty database.
 - Production Docker image build.

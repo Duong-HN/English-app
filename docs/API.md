@@ -35,3 +35,17 @@ Speaking input is a transcript. The API prompt explicitly excludes pronunciation
 - `GET /openapi.json` — OpenAPI schema.
 
 Validation errors use HTTP `422`, authentication failures `401`, ownership-safe missing resources `404`, conflicts `409`, and upstream AI failures `502`.
+
+## Administration
+
+All administration endpoints require a JWT belonging to an active user whose role is `admin`:
+
+- `GET /admin/stats` — users, activity totals, analysis types and seven-day trend.
+- `GET /admin/users?q=&role=&is_active=&limit=&offset=` — searchable user directory.
+- `PATCH /admin/users/{id}` — activate/deactivate or promote/demote a user.
+- `GET /admin/analyses?q=&type=&user_id=&limit=&offset=` — cross-user analysis review.
+- `GET /admin/analyses/{id}` — complete analysis details.
+- `DELETE /admin/analyses/{id}` — moderated deletion.
+- `GET /admin/audit-logs` — immutable administration activity history.
+
+An administrator cannot deactivate or demote their own account, and the final active administrator cannot be disabled. User updates and analysis deletions create audit records without copying learner text into the audit payload.

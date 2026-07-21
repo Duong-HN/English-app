@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import User
+from ..models import User, utc_now
 from ..schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from ..security import create_access_token, hash_password, verify_password
 
@@ -59,6 +59,10 @@ def login(
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    user.last_login_at = utc_now()
+    user.updated_at = utc_now()
+    db.commit()
+    db.refresh(user)
     return TokenResponse(
         access_token=create_access_token(user.id, settings),
         user=UserResponse.model_validate(user),
