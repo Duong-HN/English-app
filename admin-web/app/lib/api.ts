@@ -51,6 +51,26 @@ export type AuditLog = {
   created_at: string;
 };
 
+export type ApiConsoleMethod = "GET" | "POST" | "PATCH" | "DELETE";
+
+export type ApiConsoleRequest = {
+  method: ApiConsoleMethod;
+  path: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
+
+export type ApiConsoleResponse = {
+  status: number;
+  statusText: string;
+  ok: boolean;
+  durationMs: number;
+  sizeBytes: number;
+  headers: Record<string, string>;
+  body: unknown;
+  rawBody: string;
+};
+
 type Page<T> = { items: T[]; total: number };
 
 export class ApiError extends Error {
@@ -125,6 +145,64 @@ export class AdminApi {
       throw new ApiError(detail, response.status, body);
     }
     return body as T;
+  }
+
+  async consoleRequest(request: ApiConsoleRequest): Promise<ApiConsoleResponse> {
+    const path = request.path.trim();
+    if (!path.startsWith("/") || path.startsWith("//")) {
+      throw new Error("Đường dẫn API phải bắt đầu bằng một dấu / và không được là URL bên ngoài.");
+    }
+
+    const backend = new URL(this.baseUrl);
+    const target = new URL(path, `${backend.origin}/`);
+    if (target.origin !== backend.origin) {
+      throw new Error("API Console chỉ được gọi backend đang cấu hình.");
+    }
+
+    const headers = new Headers(request.headers);
+    headers.set("Accept", "application/json");
+    if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+    const body = request.body?.trim();
+    if (body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const startedAt = performance.now();
+    let response: Response;
+    try {
+      response = await fetch(target, {
+        method: request.method,
+        headers,
+        body: request.method === "GET" ? undefined : body || undefined,
+      });
+    } catch (error) {
+      throw new ApiError(
+        error instanceof Error ? error.message : "Không thể kết nối backend.",
+        0,
+        null,
+      );
+    }
+
+    const rawBody = await response.text();
+    let parsedBody: unknown = rawBody;
+    if ((response.headers.get("content-type") ?? "").includes("application/json")) {
+      try {
+        parsedBody = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        parsedBody = rawBody;
+      }
+    }
+
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      durationMs: Math.round(performance.now() - startedAt),
+      sizeBytes: new TextEncoder().encode(rawBody).length,
+      headers: Object.fromEntries([...response.headers.entries()].sort()),
+      body: parsedBody,
+      rawBody,
+    };
   }
 
   login(email: string, password: string) {

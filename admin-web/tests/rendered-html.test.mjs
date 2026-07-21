@@ -40,11 +40,12 @@ test("server-renders the LearnMate administrator login", async () => {
 });
 
 test("removes starter-only code and keeps real backend integration", async () => {
-  const [page, layout, adminApp, api, packageJson] = await Promise.all([
+  const [page, layout, adminApp, api, apiConsole, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api-console.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
@@ -54,5 +55,9 @@ test("removes starter-only code and keeps real backend integration", async () =>
   assert.match(adminApp, /response\.user\.role !== "admin"/);
   assert.match(api, /\/api\/v1\/admin\/stats/);
   assert.match(api, /Authorization/);
+  assert.match(api, /consoleRequest/);
+  assert.match(apiConsole, /JWT admin tự động/);
+  assert.match(apiConsole, /Sao chép cURL/);
+  assert.match(apiConsole, /sessionStorage\.setItem\(HISTORY_KEY/);
   assert.doesNotMatch(packageJson, /starter|drizzle|tailwind|react-loading-skeleton/);
 });

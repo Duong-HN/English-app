@@ -11,9 +11,10 @@ import {
   SessionUser,
   normalizeBaseUrl,
 } from "./lib/api";
+import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "analyses" | "audit";
+type View = "overview" | "users" | "analyses" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
@@ -24,6 +25,7 @@ const navItems: Array<{ id: View; label: string; short: string }> = [
   { id: "users", label: "Người dùng", short: "02" },
   { id: "analyses", label: "Bài phân tích", short: "03" },
   { id: "audit", label: "Nhật ký quản trị", short: "04" },
+  { id: "console", label: "API Console", short: "05" },
 ];
 
 function formatDate(value: string | null, withTime = true) {
@@ -319,6 +321,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           {view === "users" && <UsersPage api={api} currentUser={session.user} />}
           {view === "analyses" && <AnalysesPage api={api} />}
           {view === "audit" && <AuditPage api={api} />}
+          {view === "console" && <ApiConsole api={api} baseUrl={session.baseUrl} />}
         </main>
       </div>
     </div>

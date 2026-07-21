@@ -12,6 +12,8 @@ không chứa dữ liệu dashboard giả lập.
 - Xem nhật ký thao tác quản trị.
 - Theo dõi trạng thái backend định kỳ.
 - Cấu hình URL backend ngay trên màn hình đăng nhập.
+- API Console kiểu Postman: preset endpoint, JWT tự động, status/time/size,
+  response body/header, lịch sử an toàn và xuất lệnh cURL.
 
 ## Chạy cục bộ
 
@@ -40,7 +42,7 @@ Tạo tài khoản quản trị từ thư mục `backend`:
 
 ```powershell
 $env:ADMIN_PASSWORD="mot-mat-khau-manh"
-python -m app.cli create-admin --email admin@example.com --name "System Admin"
+python -m app.cli create-admin --email admin@example.com --display-name "System Admin"
 ```
 
 ## Kiểm tra
