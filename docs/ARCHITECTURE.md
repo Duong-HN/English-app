@@ -48,6 +48,12 @@ API -> Flutter: result
 
 `analyses.user_id` is a cascading foreign key. Queries always include the authenticated user ID. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
 
+### admin_audit_logs
+
+`id`, `admin_user_id`, `action`, `target_type`, `target_id`, `details`, `created_at`
+
+Administrative authorization is enforced by the API. The dashboard is only a client and cannot grant itself access. Audit entries record state changes and moderation actions while excluding passwords, tokens and full learner submissions.
+
 ## Security boundaries
 
 - Passwords use Argon2 through `pwdlib`.
@@ -55,6 +61,8 @@ API -> Flutter: result
 - Tokens are stored with Flutter secure storage.
 - Gemini keys remain server-side and are ignored by Git.
 - Development identity headers are disabled in production.
+- Administrator endpoints require an active server-validated `admin` role.
+- The final active administrator and the current administrator session are protected from accidental lockout.
 - Production settings reject weak JWT secrets.
 - Release signing keys are GitHub secrets, never repository files.
 

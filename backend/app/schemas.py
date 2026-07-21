@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 AnalysisType = Literal["reading", "writing", "speaking"]
 
@@ -74,3 +74,70 @@ class HistoryResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class AdminStatsTrendItem(BaseModel):
+    date: str
+    count: int
+
+
+class AdminStatsResponse(BaseModel):
+    total_users: int
+    active_users: int
+    admin_users: int
+    new_users_last_7_days: int
+    total_analyses: int
+    analyses_today: int
+    analyses_by_type: dict[str, int]
+    analyses_last_7_days: list[AdminStatsTrendItem]
+
+
+class AdminUserResponse(UserResponse):
+    analysis_count: int
+    updated_at: datetime | None
+    last_login_at: datetime | None
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserResponse]
+    total: int
+
+
+class AdminUserUpdate(BaseModel):
+    is_active: bool | None = None
+    role: Literal["learner", "admin"] | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if self.is_active is None and self.role is None:
+            raise ValueError("At least one user field must be changed")
+        return self
+
+
+class AdminAnalysisResponse(AnalysisResponse):
+    user_id: str
+    user_email: EmailStr
+    user_display_name: str
+
+
+class AdminAnalysisListResponse(BaseModel):
+    items: list[AdminAnalysisResponse]
+    total: int
+
+
+class AdminAuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    admin_user_id: str | None
+    admin_email: EmailStr | None
+    action: str
+    target_type: str
+    target_id: str | None
+    details: dict
+    created_at: datetime
+
+
+class AdminAuditLogListResponse(BaseModel):
+    items: list[AdminAuditLogResponse]
+    total: int
