@@ -22,6 +22,14 @@ try {
         Pop-Location
     }
 
+    Push-Location admin-web
+    try {
+        Invoke-Checked { npm audit --omit=dev --audit-level=high }
+    }
+    finally {
+        Pop-Location
+    }
+
     Invoke-Checked { docker compose config --quiet }
     Invoke-Checked { docker info --format "Docker server {{.ServerVersion}}" }
     Invoke-Checked {
@@ -29,6 +37,7 @@ try {
     }
     Invoke-Checked { flutter build apk --release }
     Invoke-Checked { docker build --tag learnmate-api:release backend }
+    Invoke-Checked { docker build --tag learnmate-admin:release admin-web }
 }
 finally {
     Pop-Location

@@ -15,10 +15,19 @@
 - Alembic upgrade from an empty database.
 - Production Docker image build.
 
+## Automated administrator web checks
+
+- ESLint with React hook rules.
+- Production vinext/Cloudflare Worker build and server-rendered login verification.
+- API Console preset, custom-header validation, response-size and safe cURL tests.
+- Production Node dependency audit at high severity.
+- Admin web Docker image build.
+
 ## Delivery checks
 
 - GitHub Actions workflow validation with actionlint.
-- Docker Compose startup with PostgreSQL and API health checks.
+- Docker Compose startup with PostgreSQL, API and admin web health checks.
+- Browser integration: admin login, dashboard metrics, readiness/stats requests, learner registration and mock AI analysis through API Console.
 - Android release APK build with R8 enabled.
 
 ## Automated Flutter checks

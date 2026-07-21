@@ -24,6 +24,15 @@ try {
     finally {
         Pop-Location
     }
+
+    Push-Location admin-web
+    try {
+        Invoke-Checked { npm run lint }
+        Invoke-Checked { npm test }
+    }
+    finally {
+        Pop-Location
+    }
 }
 finally {
     Pop-Location
