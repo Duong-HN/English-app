@@ -69,9 +69,34 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  admin-image:
+    name: Publish admin web image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve lowercase image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/admin" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: admin-web
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.ref_name }}
+            ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   publish:
     name: Publish GitHub Release
-    needs: [android, backend-image]
+    needs: [android, backend-image, admin-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v6
@@ -82,3 +107,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" release-assets/*.apk --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+
+  deploy:
+    name: Run production deployment hooks
+    needs: publish
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

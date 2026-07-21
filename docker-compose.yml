@@ -25,12 +25,29 @@ services:
       JWT_SECRET: local-docker-secret-change-before-production
       ENABLE_DEV_AUTH: "false"
       AI_PROVIDER: mock
-      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  admin:
+    build:
+      context: ./admin-web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5

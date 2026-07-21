@@ -54,3 +54,16 @@ npm test
 
 `npm test` tạo bản build Cloudflare Worker rồi kiểm tra HTML render phía server.
 Phiên JWT chỉ lưu trong `sessionStorage` và tự mất khi đóng tab trình duyệt.
+
+## Docker
+
+Từ thư mục gốc dự án:
+
+```powershell
+docker compose up --build admin
+```
+
+Image production chạy bằng user Node không đặc quyền, phục vụ bản build trên cổng
+`3000` và có health check HTTP. Đặt `NEXT_PUBLIC_API_BASE_URL` thành URL HTTPS mà
+trình duyệt người quản trị có thể truy cập; không dùng hostname nội bộ Docker cho
+biến này.

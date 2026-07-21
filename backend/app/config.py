@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "LearnMate AI API"
-    app_version: str = "0.5.0"
+    app_version: str = "0.6.0"
     app_env: str = "development"
     database_url: str = "sqlite:///./learnmate.db"
     auto_create_schema: bool = True
@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     ai_timeout_seconds: float = 45
 
-    allowed_origins: str = "http://localhost:3000,http://localhost:8080"
+    allowed_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

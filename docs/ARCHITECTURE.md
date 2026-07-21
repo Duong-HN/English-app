@@ -14,13 +14,14 @@ STT text is never presented as evidence of pronunciation accuracy.
 | Component | Technology | Responsibility |
 |---|---|---|
 | Mobile | Flutter 3.41 / Dart 3.11 | Auth, camera, OCR, microphone, learning UI |
+| Admin web | React 19 / Next-compatible vinext | Operations dashboard, moderation and API Console |
 | OCR | ML Kit Text Recognition | Latin text extraction on Android/iOS |
 | STT | Device speech recognition | English transcript capture |
 | API | FastAPI / Python 3.14 | Auth, validation, AI orchestration, history |
 | ORM/migrations | SQLAlchemy / Alembic | Relational persistence and versioned schema |
 | Database | SQLite dev, PostgreSQL prod | Users and analyses |
 | AI | Mock or Gemini | Structured formative feedback |
-| Delivery | Docker / GitHub Actions / GHCR | Test, package, release and deployment trigger |
+| Delivery | Docker / Cloudflare Worker / GitHub Actions / GHCR | Test, package, release and deploy mobile/API/admin |
 
 ## Main sequence
 
@@ -36,11 +37,22 @@ API -> Database: persist analysis for user
 API -> Flutter: result
 ```
 
+Administrator flow:
+
+```text
+Admin -> Web: email/password
+Web -> API: login
+API -> Web: JWT + server-validated admin role
+Web -> API: Bearer token + administration request
+API -> Database: enforce RBAC, mutate/query, append audit record
+API -> Web: operational data or structured API Console response
+```
+
 ## Database
 
 ### users
 
-`id`, `email`, `password_hash`, `display_name`, `role`, `level`, `is_active`, `created_at`
+`id`, `email`, `password_hash`, `display_name`, `role`, `level`, `is_active`, `created_at`, `updated_at`, `last_login_at`
 
 ### analyses
 
@@ -59,6 +71,7 @@ Administrative authorization is enforced by the API. The dashboard is only a cli
 - Passwords use Argon2 through `pwdlib`.
 - JWTs expire and contain only the user ID.
 - Tokens are stored with Flutter secure storage.
+- Admin JWTs are tab-scoped in browser `sessionStorage`, not persistent local storage.
 - Gemini keys remain server-side and are ignored by Git.
 - Development identity headers are disabled in production.
 - Administrator endpoints require an active server-validated `admin` role.
