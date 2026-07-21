@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+async function render() {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+
+  return worker.fetch(
+    new Request("http://localhost/", {
+      headers: { accept: "text/html" },
+    }),
+    {
+      ASSETS: {
+        fetch: async () => new Response("Not found", { status: 404 }),
+      },
+    },
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+}
+
+test("server-renders the LearnMate administrator login", async () => {
+  const response = await render();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+  const html = await response.text();
+  assert.match(html, /<html lang="vi">/i);
+  assert.match(html, /<title>Dashboard \| LearnMate Admin<\/title>/i);
+  assert.match(html, /Quản lý lớp học AI bằng dữ liệu thật\./);
+  assert.match(html, /Đăng nhập hệ thống/);
+  assert.match(html, /Email quản trị/);
+  assert.match(html, /Vào dashboard/);
+  assert.match(html, /Đang kiểm tra phiên đăng nhập trước/);
+  assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/);
+});
+
+test("removes starter-only code and keeps real backend integration", async () => {
+  const [page, layout, adminApp, api, packageJson] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /<AdminApp defaultApiBaseUrl=\{defaultApiBaseUrl\}/);
+  assert.match(layout, /default: "LearnMate Admin"/);
+  assert.match(adminApp, /sessionStorage\.setItem/);
+  assert.match(adminApp, /response\.user\.role !== "admin"/);
+  assert.match(api, /\/api\/v1\/admin\/stats/);
+  assert.match(api, /Authorization/);
+  assert.doesNotMatch(packageJson, /starter|drizzle|tailwind|react-loading-skeleton/);
+});

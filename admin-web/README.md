@@ -1,0 +1,54 @@
+# LearnMate Admin
+
+Web quản trị dành cho đội vận hành LearnMate AI. Ứng dụng dùng API backend thật,
+không chứa dữ liệu dashboard giả lập.
+
+## Chức năng
+
+- Đăng nhập bằng JWT và chặn tài khoản không có role `admin`.
+- Tổng quan người dùng, bài phân tích và xu hướng 7 ngày.
+- Tìm kiếm, phân trang, đổi vai trò và khóa/mở tài khoản.
+- Xem chi tiết, lọc và xóa bài phân tích.
+- Xem nhật ký thao tác quản trị.
+- Theo dõi trạng thái backend định kỳ.
+- Cấu hình URL backend ngay trên màn hình đăng nhập.
+
+## Chạy cục bộ
+
+Yêu cầu Node.js `>=22.13.0` và backend LearnMate đang chạy.
+
+```bash
+npm install
+npm run dev
+```
+
+Mặc định web kết nối `http://127.0.0.1:8000`. Có thể đặt URL khác:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://api.example.com npm run dev
+```
+
+Trên PowerShell:
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="https://api.example.com"
+$env:NEXT_PUBLIC_SITE_URL="https://admin.example.com"
+npm run dev
+```
+
+Tạo tài khoản quản trị từ thư mục `backend`:
+
+```powershell
+$env:ADMIN_PASSWORD="mot-mat-khau-manh"
+python -m app.cli create-admin --email admin@example.com --name "System Admin"
+```
+
+## Kiểm tra
+
+```bash
+npm run lint
+npm test
+```
+
+`npm test` tạo bản build Cloudflare Worker rồi kiểm tra HTML render phía server.
+Phiên JWT chỉ lưu trong `sessionStorage` và tự mất khi đóng tab trình duyệt.
