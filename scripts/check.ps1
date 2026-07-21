@@ -11,9 +11,15 @@ function Invoke-Checked {
 
 Push-Location $PSScriptRoot\..
 try {
-    Invoke-Checked { dart format --output=none --set-exit-if-changed lib test }
-    Invoke-Checked { flutter analyze }
-    Invoke-Checked { flutter test }
+    Push-Location mobile
+    try {
+        Invoke-Checked { dart format --output=none --set-exit-if-changed lib test }
+        Invoke-Checked { flutter analyze }
+        Invoke-Checked { flutter test }
+    }
+    finally {
+        Pop-Location
+    }
 
     Push-Location backend
     try {
@@ -25,7 +31,7 @@ try {
         Pop-Location
     }
 
-    Push-Location admin-web
+    Push-Location admin-dashboard
     try {
         Invoke-Checked { npm run lint }
         Invoke-Checked { npm test }

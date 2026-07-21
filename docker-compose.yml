@@ -37,7 +37,7 @@ services:
 
   admin:
     build:
-      context: ./admin-web
+      context: ./admin-dashboard
     ports:
       - "3000:3000"
     environment:

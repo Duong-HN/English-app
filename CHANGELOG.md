@@ -14,6 +14,7 @@ All notable changes to LearnMate AI are recorded here.
 
 ### Changed
 
+- Reorganized the monorepo into explicit `backend/`, `mobile/`, and `admin-dashboard/` application directories, with shared infrastructure at the repository root.
 - CI/CD now validates and packages mobile, backend and administrator web as one release unit.
 - Local Compose CORS supports both `localhost` and `127.0.0.1` development origins.
 

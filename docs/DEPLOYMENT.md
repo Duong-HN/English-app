@@ -31,9 +31,9 @@ ANDROID_KEY_ALIAS
 ANDROID_KEY_PASSWORD
 ```
 
-Generate an upload key locally with Android `keytool`, Base64-encode the `.jks`, and store only the encoded value in GitHub secrets. Never commit the keystore or `android/key.properties`.
+Generate an upload key locally with Android `keytool`, Base64-encode the `.jks`, and store only the encoded value in GitHub secrets. Never commit the keystore or `mobile/android/key.properties`.
 
-Without `android/key.properties`, a local `flutter build apk --release` uses the debug key only for a release-mode smoke build. Do not distribute that artifact. The GitHub release job fails early unless all real signing secrets are present.
+Without `mobile/android/key.properties`, a local `flutter build apk --release` uses the debug key only for a release-mode smoke build. Do not distribute that artifact. The GitHub release job fails early unless all real signing secrets are present.
 
 ## Service CD
 
