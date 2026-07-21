@@ -10,17 +10,25 @@ class Base(DeclarativeBase):
     pass
 
 
+def normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
 def _engine():
-    url = get_settings().database_url
+    url = normalize_database_url(get_settings().database_url)
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, connect_args=connect_args)
+    return create_engine(url, connect_args=connect_args, pool_pre_ping=True)
 
 
 engine = _engine()
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db

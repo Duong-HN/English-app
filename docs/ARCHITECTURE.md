@@ -1,74 +1,66 @@
-# LearnMate AI — implementation blueprint
+# Architecture
 
 ## Product boundary
 
-The first release is a formative English-learning assistant, not an official IELTS scorer. The guaranteed MVP flow is:
+LearnMate AI gives formative feedback for Vietnamese English learners. It is not an accredited language examination. Speaking is intentionally split into:
 
-```text
-text input (camera OCR in phase 2) -> backend -> structured AI feedback -> saved history
-```
+1. STT transcript evaluation: relevance, grammar and vocabulary.
+2. Future pronunciation assessment: short target-word audio compared at phoneme level.
 
-Speaking is split into two claims:
-
-1. Transcript evaluation: grammar, vocabulary and relevance.
-2. Pronunciation practice: short recordings of selected target words. A pronunciation engine or phoneme-level analysis is required; STT alone is not a pronunciation score.
+STT text is never presented as evidence of pronunciation accuracy.
 
 ## Components
 
-| Layer | Choice | Reason |
+| Component | Technology | Responsibility |
 |---|---|---|
-| Mobile | Flutter/Dart | One codebase for Android and iOS |
-| API | FastAPI/Python | Typed request validation and easy automated tests |
-| Local DB | SQLite | Zero setup for development and demo |
-| Production DB | PostgreSQL | Same relational model, safe migration path |
-| AI | Provider interface; Mock default, Gemini adapter optional | Tests and demos remain deterministic and cheap |
-| OCR | On-device OCR adapter, added after text flow is stable | Camera/OCR does not block backend and UI work |
-| Auth | Dev header now; Firebase Auth/OIDC before release | Do not ship the development identity mechanism |
+| Mobile | Flutter 3.41 / Dart 3.11 | Auth, camera, OCR, microphone, learning UI |
+| OCR | ML Kit Text Recognition | Latin text extraction on Android/iOS |
+| STT | Device speech recognition | English transcript capture |
+| API | FastAPI / Python 3.14 | Auth, validation, AI orchestration, history |
+| ORM/migrations | SQLAlchemy / Alembic | Relational persistence and versioned schema |
+| Database | SQLite dev, PostgreSQL prod | Users and analyses |
+| AI | Mock or Gemini | Structured formative feedback |
+| Delivery | Docker / GitHub Actions / GHCR | Test, package, release and deployment trigger |
 
-## Database schema
+## Main sequence
+
+```text
+Learner -> Flutter: camera image
+Flutter -> ML Kit: recognize locally
+ML Kit -> Flutter: extracted text
+Learner -> Flutter: review/edit text
+Flutter -> API: Bearer token + text
+API -> AI provider: prompt + JSON schema
+AI provider -> API: structured result
+API -> Database: persist analysis for user
+API -> Flutter: result
+```
+
+## Database
 
 ### users
 
-`id`, `email`, `display_name`, `role`, `level`, `created_at`
+`id`, `email`, `password_hash`, `display_name`, `role`, `level`, `is_active`, `created_at`
 
 ### analyses
 
-`id`, `user_id`, `type`, `input_text`, `result` (JSON), `score`, `provider`, `created_at`
+`id`, `user_id`, `type`, `input_text`, `result`, `score`, `provider`, `created_at`
 
-The JSON result is intentionally flexible for the MVP. Before production, add versioned result schemas and migrations for vocabulary, exercises and pronunciation attempts.
+`analyses.user_id` is a cascading foreign key. Queries always include the authenticated user ID. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
 
-## API contract
+## Security boundaries
 
-- `GET /health`
-- `POST /api/v1/analyses/reading`
-- `POST /api/v1/analyses/writing`
-- `POST /api/v1/analyses/speaking`
-- `GET /api/v1/analyses?limit=20`
+- Passwords use Argon2 through `pwdlib`.
+- JWTs expire and contain only the user ID.
+- Tokens are stored with Flutter secure storage.
+- Gemini keys remain server-side and are ignored by Git.
+- Development identity headers are disabled in production.
+- Production settings reject weak JWT secrets.
+- Release signing keys are GitHub secrets, never repository files.
 
-Request body:
+## Known production boundaries
 
-```json
-{"input_text":"The learner's English text"}
-```
-
-Every analysis is stored against the authenticated user. In development `X-Dev-User` is used only to make the vertical slice runnable. Production must replace it with verified Firebase/OIDC tokens, authorization rules, rate limiting and request logging with personal data redacted.
-
-## 12-week delivery plan
-
-1. Weeks 1–2: finalize scope, UI flows, API contract, database and test dataset.
-2. Weeks 3–4: Flutter shell, API client, history and error states.
-3. Weeks 5–6: Mock provider, then Gemini adapter; validate JSON and measure latency/cost.
-4. Weeks 7–8: OCR camera adapter; always show/edit extracted text before analysis.
-5. Week 9: writing and transcript-based speaking feedback.
-6. Week 10: selected-word pronunciation experiment; report limitations honestly.
-7. Weeks 11–12: integration tests, Android release build, user test, report and presentation build.
-
-## Definition of done for the MVP
-
-- A fresh checkout can run backend tests and Flutter tests.
-- A learner can submit reading, writing and speaking text and see structured feedback.
-- Results persist and appear in history.
-- AI key is server-side only.
-- Mock mode is deterministic; Gemini mode has timeout and error handling.
-- At least 20 representative samples are evaluated manually and documented.
-- Android APK is built from a tagged Git commit.
+- Add rate limiting through an API gateway or Redis-backed limiter before public launch.
+- Add password reset/email verification before public registration.
+- Add observability and personal-data retention rules.
+- Validate pronunciation with a dedicated acoustic/phoneme pipeline, not an LLM transcript score.

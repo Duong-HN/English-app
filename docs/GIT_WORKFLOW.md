@@ -1,20 +1,30 @@
 # Git workflow
 
-Recommended milestones:
+Use short-lived feature branches and pull requests into `main` or `master`. CI must pass before merge.
+
+Commit examples:
 
 ```text
-v0.1.0-scaffold  Flutter shell + backend health check
-v0.2.0-vertical  reading/writing/speaking text flows + SQLite history
-v0.3.0-ai        Gemini adapter + response validation/cost controls
-v0.4.0-ocr       camera OCR and editable extracted text
-v1.0.0-demo      tests, Android APK, report and presentation build
+feat(auth): add JWT login and secure token storage
+feat(ocr): scan Latin text from camera images
+test(api): verify per-user history isolation
+ci: publish signed APK and backend container on tags
 ```
 
-Keep commits small and named by outcome, for example:
+Release milestones:
 
 ```text
-feat(api): add persisted analysis endpoints
-feat(app): render structured learning feedback
-test(api): cover validation and history isolation
-docs: add MVP architecture and test plan
+v0.2.0-vertical  text-first prototype
+v0.5.0-mvp       auth, OCR, STT, migrations and CI/CD-ready MVP
+v0.8.0-rc        user validation, observability and release hardening
+v1.0.0           evaluated graduation demo
 ```
+
+Create releases only from a clean, tested commit:
+
+```powershell
+git tag -a v0.5.0-mvp -m "LearnMate authenticated OCR MVP"
+git push origin master --follow-tags
+```
+
+The tag starts the signed Android release and GHCR backend image workflows.

@@ -1,21 +1,50 @@
 # Test plan
 
-## Backend automated tests
+## Automated backend checks
 
-- health endpoint returns `200`.
-- reading analysis returns structured result.
-- analysis is persisted and scoped to the user.
-- empty/oversized input is rejected by validation.
-- provider failure is returned as `502`, not an unhandled server error.
+- Ruff static checks.
+- Known-vulnerability scan of production Python dependencies with pip-audit.
+- Health and database readiness.
+- Registration, duplicate email, login and invalid password.
+- JWT profile access and password-hash non-disclosure.
+- Authentication requirement on learning endpoints.
+- Analysis persistence, deletion and user isolation.
+- Whitespace/input validation.
+- Alembic upgrade from an empty database.
+- Production Docker image build.
 
-## Mobile tests
+## Delivery checks
 
-- empty text cannot be submitted.
-- loading state disables the action.
-- API result renders reading vocabulary and writing/speaking feedback.
-- failed API request renders a user-readable error.
-- history screen renders saved items and supports refresh.
+- GitHub Actions workflow validation with actionlint.
+- Docker Compose startup with PostgreSQL and API health checks.
+- Android release APK build with R8 enabled.
 
-## Manual acceptance test
+## Automated Flutter checks
 
-Use 20 texts: signs, menus, short emails, a paragraph, a 100-word opinion, and five speaking transcripts. Record OCR quality, response time, invalid outputs, useful feedback and estimated API cost. Do not report AI scores as scientifically validated language-exam scores.
+- Dart formatting and `flutter analyze`.
+- Login screen smoke test.
+- API login payload and missing auth-header check.
+- Bearer token propagation.
+- API validation-error parsing.
+- Auth controller token persistence.
+- Android debug build in CI.
+
+## Manual device acceptance
+
+Test on at least one physical Android device:
+
+1. Register, close and reopen the app, verify session restoration.
+2. Scan five clean and five difficult images; edit OCR output before submission.
+3. Submit reading and writing samples; verify structured UI and history.
+4. Dictate five English answers; verify transcript and clearly labeled limitations.
+5. Disable network during API calls and verify a readable error.
+6. Delete a history item and verify it cannot be accessed again.
+
+Record OCR accuracy, API latency, malformed AI responses, useful-feedback rate and cost across at least 20 representative samples.
+
+## Commands
+
+```powershell
+.\scripts\check.ps1
+.\scripts\release-check.ps1
+```

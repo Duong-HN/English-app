@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>English Ai Tutor</string>
+	<string>LearnMate AI</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,6 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>LearnMate uses the camera to scan English text for on-device OCR.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LearnMate can import an image so you can extract and study its English text.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LearnMate uses the microphone to turn your spoken answer into text.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LearnMate uses speech recognition to provide feedback on grammar and vocabulary.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

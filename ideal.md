@@ -153,8 +153,11 @@ flowchart LR
     Admin --> UC8
     Admin --> UC9
     Admin --> UC10
-    2. ĐẶC TẢ CHI TIẾT CÁC LUỒNG TÍNH NĂNG (FEATURE FLOWS)
-2.1. Phân quyền: NGƯỜI HỌC (LEARNER ROLE)
+```
+
+## 2. ĐẶC TẢ CHI TIẾT CÁC LUỒNG TÍNH NĂNG (FEATURE FLOWS)
+
+### 2.1. Phân quyền: NGƯỜI HỌC (LEARNER ROLE)
 Luồng 1: Xác thực và Cá nhân hóa lộ trình (Onboarding Flow)
 
 Mở ứng dụng -> Màn hình Splash Screen.
@@ -237,14 +240,15 @@ Khóa (Ban) tài khoản nếu phát hiện lạm dụng/spam.
 Dưới đây là sơ đồ tuần tự mô tả kỹ thuật luồng tính năng phức tạp và "ăn tiền" nhất của đồ án: Chụp ảnh văn bản -> OCR -> LLM AI -> Trả kết quả học tập.
 
 (Tiếp tục copy đoạn code bên dưới dán vào trang https://mermaid.live để lấy ảnh sơ đồ)
+```mermaid
 sequenceDiagram
     autonumber
     actor Learner as Người học
     participant App as Mobile App (Flutter)
     participant OCR as Google ML Kit (Local OCR)
-    participant Cloud as Backend (Firebase Cloud Functions)
-    participant LLM as LLM API (Gemini/OpenAI)
-    participant DB as Firestore Database
+    participant Cloud as Backend (FastAPI)
+    participant LLM as Gemini API
+    participant DB as PostgreSQL Database
 
     Learner->>App: Mở tính năng "Quét văn bản" & Chụp ảnh
     activate App
@@ -256,13 +260,9 @@ sequenceDiagram
     App-->>Learner: Hiển thị văn bản thô để xác nhận
     Learner->>App: Xác nhận & Bấm "Phân tích"
     
-    App->>Cloud: Gửi Raw Text + User ID
+    App->>Cloud: Gửi Raw Text + JWT
     activate Cloud
-    Cloud->>DB: Lấy cấu hình System Prompt cho tính năng này
-    activate DB
-    DB-->>Cloud: Trả về System Prompt
-    deactivate DB
-    
+    Cloud->>Cloud: Xác thực, kiểm tra input và tạo prompt
     Cloud->>LLM: Gửi Request (System Prompt + Raw Text)
     activate LLM
     Note over Cloud, LLM: Prompt yêu cầu trả về định dạng JSON (Bản dịch, Từ vựng, Bài tập)
@@ -275,7 +275,9 @@ sequenceDiagram
     
     App-->>Learner: Render UI: Bản dịch, Flashcard từ vựng, Câu hỏi
     deactivate App
-    Bạn có thể dùng ngay nội dung trong file trên để cho vào chương **Phân tích thiết kế** của Đồ án. 
+```
+
+Bạn có thể dùng ngay nội dung trong file trên để cho vào chương **Phân tích thiết kế** của Đồ án.
 
 **Mẹo nhỏ khi làm phần này:** 
 Việc tách phần gọi API của LLM (Gemini/OpenAI) ra một **Backend (Cloud Functions)** thay vì gọi trực tiếp từ code Flutter (Mobile App) như trong sơ đồ Sequence ở trên là một điểm **cộng rất lớn** về kiến trúc phần mềm (Architecture). Nếu bị hội đồng hỏi, bạn hãy giải thích rằng làm như vậy là để **bảo mật API Key** (không bị dịch ngược app để lấy cắp), đồng thời Admin có thể sửa đổi Prompt một cách tập trung ở Backend mà không cần phải bắt người dùng cập nhật lại App trên Store. 

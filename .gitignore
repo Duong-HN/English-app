@@ -54,3 +54,8 @@ backend/tests/__pycache__/
 *.db
 .venv/
 .pytest_cache/
+
+# Android release signing
+android/key.properties
+android/app/*.jks
+android/app/*.keystore

@@ -1,48 +1,141 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
-os.environ["DATABASE_URL"] = "sqlite:///./test_learnmate.db"
-os.environ["AI_PROVIDER"] = "mock"
-os.environ["APP_ENV"] = "development"
-Path("test_learnmate.db").unlink(missing_ok=True)
+test_database = Path(__file__).with_name("learnmate_test.db")
+test_database.unlink(missing_ok=True)
+os.environ.update(
+    {
+        "DATABASE_URL": f"sqlite:///{test_database.as_posix()}",
+        "AI_PROVIDER": "mock",
+        "APP_ENV": "test",
+        "AUTO_CREATE_SCHEMA": "true",
+        "ENABLE_DEV_AUTH": "false",
+        "JWT_SECRET": "test-secret-that-is-long-enough-for-automated-tests",
+    }
+)
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app
+from app.main import app  # noqa: E402
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
     with TestClient(app) as test_client:
         yield test_client
 
 
-def test_health(client):
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+def register(client: TestClient, email: str) -> dict:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "safe-password-123", "display_name": "Test Learner"},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
-def test_reading_analysis_is_saved(client):
+def auth_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_health_and_readiness(client):
+    health = client.get("/health")
+    ready = client.get("/health/ready")
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+    assert ready.status_code == 200
+
+
+def test_register_and_get_profile(client):
+    session = register(client, "profile@example.com")
+    profile = client.get("/api/v1/auth/me", headers=auth_header(session["access_token"]))
+    assert profile.status_code == 200
+    assert profile.json()["email"] == "profile@example.com"
+    assert "password_hash" not in profile.json()
+
+
+def test_duplicate_registration_is_rejected(client):
+    register(client, "duplicate@example.com")
+    duplicate = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "DUPLICATE@example.com",
+            "password": "safe-password-123",
+            "display_name": "Other Learner",
+        },
+    )
+    assert duplicate.status_code == 409
+
+
+def test_login_and_invalid_password(client):
+    register(client, "login@example.com")
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "login@example.com", "password": "safe-password-123"},
+    )
+    invalid = client.post(
+        "/api/v1/auth/login",
+        json={"email": "login@example.com", "password": "wrong-password"},
+    )
+    assert login.status_code == 200
+    assert login.json()["access_token"]
+    assert invalid.status_code == 401
+
+
+def test_analysis_requires_authentication(client):
     response = client.post(
         "/api/v1/analyses/reading",
         json={"input_text": "The quick brown fox jumps over the lazy dog."},
-        headers={"X-Dev-User": "test-user"},
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["provider"] == "mock"
-    assert body["result"]["translation"]
+    assert response.status_code == 401
 
-    history = client.get("/api/v1/analyses", headers={"X-Dev-User": "test-user"})
+
+def test_analysis_is_saved_and_deleted(client):
+    session = register(client, "analysis@example.com")
+    headers = auth_header(session["access_token"])
+    created = client.post(
+        "/api/v1/analyses/reading",
+        json={"input_text": "The learner practices English every day."},
+        headers=headers,
+    )
+    assert created.status_code == 200
+    assert created.json()["provider"] == "mock"
+    assert created.json()["result"]["translation"]
+
+    history = client.get("/api/v1/analyses", headers=headers)
     assert history.status_code == 200
-    assert len(history.json()["items"]) == 1
+    assert history.json()["total"] == 1
+
+    deleted = client.delete(f"/api/v1/analyses/{created.json()['id']}", headers=headers)
+    assert deleted.status_code == 200
+    assert client.get("/api/v1/analyses", headers=headers).json()["total"] == 0
 
 
-def test_empty_input_is_rejected(client):
-    response = client.post("/api/v1/analyses/writing", json={"input_text": ""})
+def test_histories_are_isolated_by_user(client):
+    first = register(client, "first@example.com")
+    second = register(client, "second@example.com")
+    client.post(
+        "/api/v1/analyses/writing",
+        json={"input_text": "I practice English because it helps my future career."},
+        headers=auth_header(first["access_token"]),
+    )
+    second_history = client.get(
+        "/api/v1/analyses",
+        headers=auth_header(second["access_token"]),
+    )
+    assert second_history.status_code == 200
+    assert second_history.json()["total"] == 0
+
+
+def test_whitespace_input_is_rejected(client):
+    session = register(client, "validation@example.com")
+    response = client.post(
+        "/api/v1/analyses/writing",
+        json={"input_text": "   "},
+        headers=auth_header(session["access_token"]),
+    )
     assert response.status_code == 422

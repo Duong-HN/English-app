@@ -1,26 +1,33 @@
-# LearnMate AI backend
+# LearnMate API
 
-FastAPI backend for the MVP. It uses SQLite and Mock AI by default, so the complete vertical slice can run without an API key.
+FastAPI service for authentication, AI analysis and learning history.
 
-## Run locally
+## Local commands
 
 ```powershell
-cd backend
 py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 Copy-Item .env.example .env
-uvicorn app.main:app --reload --port 8000
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-OpenAPI is available at <http://127.0.0.1:8000/docs>.
+Open <http://127.0.0.1:8000/docs> for Swagger UI.
 
-## Use Gemini
-
-Set `AI_PROVIDER=gemini` and `GEMINI_API_KEY` in `.env`. The mobile app never receives the key; only this backend calls the provider. Keep `mock` for automated tests and demos that must not incur API costs.
-
-## Test
+## Quality checks
 
 ```powershell
-pytest -q
+python -m ruff check app tests
+python -m pytest -q
 ```
+
+## Database migrations
+
+```powershell
+python -m alembic upgrade head
+python -m alembic current
+python -m alembic revision --autogenerate -m "describe change"
+```
+
+Production runs migrations before starting Uvicorn. `AUTO_CREATE_SCHEMA=true` exists only for tests and convenient local development.

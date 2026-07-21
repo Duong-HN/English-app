@@ -1,0 +1,24 @@
+name: Deploy backend
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger configured production deployment
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.BACKEND_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "BACKEND_DEPLOY_HOOK_URL is not configured; deployment was intentionally skipped."
+            exit 0
+          fi
+          curl --fail-with-body --retry 3 --request POST "$DEPLOY_HOOK_URL"

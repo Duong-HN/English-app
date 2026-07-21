@@ -1,13 +1,39 @@
 services:
-  api:
-    image: python:3.14-slim
-    working_dir: /app
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: learnmate
+      POSTGRES_USER: learnmate
+      POSTGRES_PASSWORD: local-development-password
     volumes:
-      - ./backend:/app
-    command: sh -c "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - learnmate_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learnmate -d learnmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
     ports:
       - "8000:8000"
     environment:
       APP_ENV: development
-      DATABASE_URL: sqlite:///./learnmate.db
+      DATABASE_URL: postgresql+psycopg://learnmate:local-development-password@db:5432/learnmate
+      AUTO_CREATE_SCHEMA: "false"
+      JWT_SECRET: local-docker-secret-change-before-production
+      ENABLE_DEV_AUTH: "false"
       AI_PROVIDER: mock
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  learnmate_postgres:
