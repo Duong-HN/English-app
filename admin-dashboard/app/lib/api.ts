@@ -23,6 +23,8 @@ export type AdminStats = {
   new_users_last_7_days: number;
   total_analyses: number;
   analyses_today: number;
+  total_learning_paths: number;
+  learning_paths_today: number;
   analyses_by_type: Record<string, number>;
   analyses_last_7_days: Array<{ date: string; count: number }>;
 };
@@ -36,6 +38,35 @@ export type AdminAnalysis = {
   input_text: string;
   result: Record<string, unknown>;
   score: number | null;
+  provider: string;
+  created_at: string;
+};
+
+export type LearningPathTask = {
+  day: number;
+  title: string;
+  skill: string;
+  activity: string;
+  duration_minutes: number;
+  success_criteria: string;
+};
+
+export type AdminLearningPath = {
+  id: string;
+  user_id: string;
+  user_email: string;
+  user_display_name: string;
+  goal: string;
+  current_level: "A1" | "A2" | "B1" | "B2" | "C1";
+  minutes_per_day: number;
+  plan: {
+    summary: string;
+    weekly_goal: string;
+    focus_areas: string[];
+    personalization_notes: string[];
+    daily_tasks: LearningPathTask[];
+    checkpoints: string[];
+  };
   provider: string;
   created_at: string;
 };
@@ -74,13 +105,14 @@ export type ApiConsoleResponse = {
 type Page<T> = { items: T[]; total: number };
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly body: unknown,
-  ) {
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(message: string, status: number, body: unknown) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
+    this.body = body;
   }
 }
 
@@ -111,9 +143,11 @@ function queryString(values: Record<string, string | number | boolean | null | u
 
 export class AdminApi {
   readonly baseUrl: string;
+  private readonly token?: string;
 
-  constructor(baseUrl: string, private readonly token?: string) {
+  constructor(baseUrl: string, token?: string) {
     this.baseUrl = normalizeBaseUrl(baseUrl);
+    this.token = token;
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -266,6 +300,19 @@ export class AdminApi {
   deleteAnalysis(analysisId: string) {
     return this.request<{ message: string }>(
       `/api/v1/admin/analyses/${analysisId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  learningPaths(filters: { q?: string; limit?: number; offset?: number }) {
+    return this.request<Page<AdminLearningPath>>(
+      `/api/v1/admin/learning-paths${queryString(filters)}`,
+    );
+  }
+
+  deleteLearningPath(learningPathId: string) {
+    return this.request<{ message: string }>(
+      `/api/v1/admin/learning-paths/${learningPathId}`,
       { method: "DELETE" },
     );
   }

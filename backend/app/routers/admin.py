@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_admin
-from ..models import AdminAuditLog, Analysis, User, utc_now
+from ..models import AdminAuditLog, Analysis, LearningPath, User, utc_now
 from ..schemas import (
     AdminAnalysisListResponse,
     AdminAnalysisResponse,
     AdminAuditLogListResponse,
     AdminAuditLogResponse,
+    AdminLearningPathListResponse,
+    AdminLearningPathResponse,
     AdminStatsResponse,
     AdminStatsTrendItem,
     AdminUserListResponse,
@@ -51,6 +53,21 @@ def _analysis_response(analysis: Analysis, user: User) -> AdminAnalysisResponse:
         score=analysis.score,
         provider=analysis.provider,
         created_at=analysis.created_at,
+    )
+
+
+def _learning_path_response(learning_path: LearningPath, user: User) -> AdminLearningPathResponse:
+    return AdminLearningPathResponse(
+        id=learning_path.id,
+        user_id=user.id,
+        user_email=user.email,
+        user_display_name=user.display_name,
+        goal=learning_path.goal,
+        current_level=learning_path.current_level,
+        minutes_per_day=learning_path.minutes_per_day,
+        plan=learning_path.plan,
+        provider=learning_path.provider,
+        created_at=learning_path.created_at,
     )
 
 
@@ -109,6 +126,10 @@ def stats(
     analyses_today = (
         db.scalar(select(func.count()).select_from(Analysis).where(Analysis.created_at >= today)) or 0
     )
+    total_learning_paths = db.scalar(select(func.count()).select_from(LearningPath)) or 0
+    learning_paths_today = (
+        db.scalar(select(func.count()).select_from(LearningPath).where(LearningPath.created_at >= today)) or 0
+    )
 
     type_rows = db.execute(select(Analysis.type, func.count()).group_by(Analysis.type)).all()
     analyses_by_type = {"reading": 0, "writing": 0, "speaking": 0}
@@ -133,6 +154,8 @@ def stats(
         new_users_last_7_days=new_users,
         total_analyses=total_analyses,
         analyses_today=analyses_today,
+        total_learning_paths=total_learning_paths,
+        learning_paths_today=learning_paths_today,
         analyses_by_type=analyses_by_type,
         analyses_last_7_days=trend,
     )
@@ -292,6 +315,65 @@ def delete_analysis(
     db.delete(analysis)
     db.commit()
     return MessageResponse(message="Analysis deleted by administrator")
+
+
+@router.get("/learning-paths", response_model=AdminLearningPathListResponse)
+def list_learning_paths(
+    q: str | None = Query(default=None, max_length=200),
+    user_id: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    filters = []
+    if q and q.strip():
+        needle = f"%{q.strip().lower()}%"
+        filters.append(
+            or_(
+                func.lower(LearningPath.goal).like(needle),
+                func.lower(User.email).like(needle),
+                func.lower(User.display_name).like(needle),
+            )
+        )
+    if user_id:
+        filters.append(LearningPath.user_id == user_id)
+
+    total = db.scalar(select(func.count()).select_from(LearningPath).join(User).where(*filters)) or 0
+    rows = db.execute(
+        select(LearningPath, User)
+        .join(User)
+        .where(*filters)
+        .order_by(LearningPath.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return AdminLearningPathListResponse(
+        items=[_learning_path_response(learning_path, user) for learning_path, user in rows],
+        total=total,
+    )
+
+
+@router.delete("/learning-paths/{learning_path_id}", response_model=MessageResponse)
+def delete_learning_path(
+    learning_path_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    learning_path = db.get(LearningPath, learning_path_id)
+    if learning_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learning path not found")
+    _record_audit(
+        db,
+        admin,
+        action="learning_path.deleted",
+        target_type="learning_path",
+        target_id=learning_path.id,
+        details={"user_id": learning_path.user_id, "current_level": learning_path.current_level},
+    )
+    db.delete(learning_path)
+    db.commit()
+    return MessageResponse(message="Learning path deleted by administrator")
 
 
 @router.get("/audit-logs", response_model=AdminAuditLogListResponse)

@@ -81,4 +81,45 @@ void main() {
       ),
     );
   });
+
+  test(
+    'learning path generation sends personalized settings with bearer token',
+    () async {
+      late http.Request captured;
+      final client = ApiClient(
+        baseUrl: 'https://api.example.com',
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode({
+              'id': 'path-1',
+              'goal': 'Improve speaking',
+              'current_level': 'B1',
+              'minutes_per_day': 30,
+              'plan': <String, dynamic>{},
+              'provider': 'mock',
+              'created_at': '2026-07-22T00:00:00Z',
+            }),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      )..accessToken = 'learner-token';
+
+      final response = await client.generateLearningPath(
+        goal: 'Improve speaking',
+        currentLevel: 'B1',
+        minutesPerDay: 30,
+      );
+
+      expect(captured.url.path, '/api/v1/learning-paths/generate');
+      expect(captured.headers['Authorization'], 'Bearer learner-token');
+      expect(jsonDecode(captured.body), {
+        'goal': 'Improve speaking',
+        'current_level': 'B1',
+        'minutes_per_day': 30,
+      });
+      expect(response['id'], 'path-1');
+    },
+  );
 }

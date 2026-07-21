@@ -25,6 +25,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _learningPathKey = GlobalKey<_LearningPathPageState>();
   final _historyKey = GlobalKey<_HistoryPageState>();
   late final OcrService _ocrService;
   late final SpeechService _speechService;
@@ -42,6 +43,7 @@ class _HomePageState extends State<HomePage> {
         ocrService: _ocrService,
         speechService: _speechService,
       ),
+      _LearningPathPage(key: _learningPathKey, apiClient: widget.apiClient),
       _HistoryPage(key: _historyKey, apiClient: widget.apiClient),
       _ProfilePage(authController: widget.authController),
     ];
@@ -49,7 +51,8 @@ class _HomePageState extends State<HomePage> {
 
   void _selectPage(int index) {
     setState(() => _selectedIndex = index);
-    if (index == 1) _historyKey.currentState?.refresh();
+    if (index == 1) _learningPathKey.currentState?.refresh();
+    if (index == 2) _historyKey.currentState?.refresh();
   }
 
   @override
@@ -67,6 +70,11 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.school),
             label: 'Học',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.route_outlined),
+            selectedIcon: Icon(Icons.route),
+            label: 'Lộ trình',
+          ),
           NavigationDestination(icon: Icon(Icons.history), label: 'Lịch sử'),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
@@ -74,6 +82,354 @@ class _HomePageState extends State<HomePage> {
             label: 'Hồ sơ',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LearningPathPage extends StatefulWidget {
+  const _LearningPathPage({super.key, required this.apiClient});
+
+  final ApiClient apiClient;
+
+  @override
+  State<_LearningPathPage> createState() => _LearningPathPageState();
+}
+
+class _LearningPathPageState extends State<_LearningPathPage> {
+  final _goalController = TextEditingController(
+    text: 'Giao tiếp tiếng Anh tự tin trong học tập và công việc',
+  );
+  Map<String, dynamic>? _learningPath;
+  String _level = 'B1';
+  int _minutes = 30;
+  bool _loading = true;
+  bool _generating = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    refresh();
+  }
+
+  @override
+  void dispose() {
+    _goalController.dispose();
+    super.dispose();
+  }
+
+  Future<void> refresh() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final result = await widget.apiClient.currentLearningPath();
+      if (!mounted) return;
+      setState(() {
+        _learningPath = result;
+        _goalController.text =
+            result['goal']?.toString() ?? _goalController.text;
+        _level = result['current_level']?.toString() ?? _level;
+        _minutes = result['minutes_per_day'] as int? ?? _minutes;
+      });
+    } on ApiException catch (exception) {
+      if (!mounted) return;
+      if (exception.statusCode == 404) {
+        setState(() => _learningPath = null);
+      } else {
+        setState(() => _error = exception.message);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể tải lộ trình học.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generate() async {
+    final goal = _goalController.text.trim();
+    if (goal.length < 3) {
+      setState(() => _error = 'Hãy nhập mục tiêu học cụ thể.');
+      return;
+    }
+    setState(() {
+      _generating = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.generateLearningPath(
+        goal: goal,
+        currentLevel: _level,
+        minutesPerDay: _minutes,
+      );
+      if (mounted) setState(() => _learningPath = result);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể kết nối máy chủ.');
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _items(Map<String, dynamic> plan, String key) {
+    return (plan[key] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = _learningPath?['plan'] as Map<String, dynamic>?;
+    return RefreshIndicator(
+      onRefresh: refresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        children: [
+          Text(
+            'Lộ trình cá nhân',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tạo kế hoạch 7 ngày từ mục tiêu và các bài đã thực hành.',
+          ),
+          const SizedBox(height: 18),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    key: const Key('learning-path-goal'),
+                    controller: _goalController,
+                    maxLength: 240,
+                    decoration: const InputDecoration(
+                      labelText: 'Mục tiêu học',
+                      hintText: 'Ví dụ: giao tiếp trong phỏng vấn xin việc',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('learning-path-level-$_level'),
+                          initialValue: _level,
+                          decoration: const InputDecoration(
+                            labelText: 'Trình độ hiện tại',
+                          ),
+                          items: const ['A1', 'A2', 'B1', 'B2', 'C1']
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) setState(() => _level = value);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          key: ValueKey('learning-path-minutes-$_minutes'),
+                          initialValue: _minutes,
+                          decoration: const InputDecoration(
+                            labelText: 'Phút mỗi ngày',
+                          ),
+                          items: const [15, 20, 30, 45, 60]
+                              .map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text('$value phút'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value != null) setState(() => _minutes = value);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('generate-learning-path'),
+                      onPressed: _generating ? null : _generate,
+                      icon: _generating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome),
+                      label: Text(
+                        _generating
+                            ? 'Đang tạo lộ trình...'
+                            : 'Tạo lộ trình 7 ngày',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            _MessageCard(message: _error!, isError: true),
+          ],
+          if (_loading) ...[
+            const SizedBox(height: 24),
+            const Center(child: CircularProgressIndicator()),
+          ] else if (plan == null) ...[
+            const SizedBox(height: 14),
+            const _MessageCard(
+              message:
+                  'Chưa có lộ trình. Chọn mục tiêu và tạo kế hoạch đầu tiên.',
+            ),
+          ] else ...[
+            const SizedBox(height: 14),
+            _LearningPathResultCard(
+              learningPath: _learningPath!,
+              tasks: _items(plan, 'daily_tasks'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LearningPathResultCard extends StatelessWidget {
+  const _LearningPathResultCard({
+    required this.learningPath,
+    required this.tasks,
+  });
+
+  final Map<String, dynamic> learningPath;
+  final List<Map<String, dynamic>> tasks;
+
+  List<String> _strings(Map<String, dynamic> plan, String key) {
+    return (plan[key] as List<dynamic>? ?? const [])
+        .map((item) => item.toString())
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = learningPath['plan'] as Map<String, dynamic>;
+    final focusAreas = _strings(plan, 'focus_areas');
+    final notes = _strings(plan, 'personalization_notes');
+    final checkpoints = _strings(plan, 'checkpoints');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.route, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${learningPath['current_level']} · ${learningPath['minutes_per_day']} phút/ngày',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(plan['summary']?.toString() ?? ''),
+            const SizedBox(height: 14),
+            Text('Trọng tâm', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: focusAreas
+                  .map((item) => Chip(label: Text(item)))
+                  .toList(),
+            ),
+            if (notes.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                'Vì sao lộ trình này phù hợp',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              ...notes.map(
+                (note) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.insights_outlined, size: 20),
+                  title: Text(note),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              'Nhiệm vụ 7 ngày',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            ...tasks.map(
+              (task) => ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  radius: 16,
+                  child: Text('${task['day']}'),
+                ),
+                title: Text(task['title']?.toString() ?? 'Nhiệm vụ'),
+                subtitle: Text(
+                  '${task['duration_minutes']} phút · ${task['skill']}',
+                ),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 48, bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(task['activity']?.toString() ?? ''),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Hoàn thành khi: ${task['success_criteria']}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (checkpoints.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Mốc kiểm tra',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              ...checkpoints.map(
+                (item) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.flag_outlined, size: 20),
+                  title: Text(item),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

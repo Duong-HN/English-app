@@ -6,7 +6,7 @@ from fastapi.responses import Response
 
 from .config import get_settings
 from .db import Base, engine
-from .routers import admin, analyses, auth, health
+from .routers import admin, analyses, auth, health, learning_paths
 
 settings = get_settings()
 
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(analyses.router, prefix="/api/v1")
+    application.include_router(learning_paths.router, prefix="/api/v1")
     application.include_router(admin.router, prefix="/api/v1")
     return application
 

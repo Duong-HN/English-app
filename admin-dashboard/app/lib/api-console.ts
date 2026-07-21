@@ -40,6 +40,12 @@ export const API_PRESETS: ApiPreset[] = [
     path: "/api/v1/admin/analyses?limit=20&offset=0",
   },
   {
+    name: "Danh sách lộ trình",
+    description: "Đọc các lộ trình học cá nhân hóa mới nhất.",
+    method: "GET",
+    path: "/api/v1/admin/learning-paths?limit=20&offset=0",
+  },
+  {
     name: "Đăng ký học viên",
     description: "Kiểm tra luồng tạo tài khoản công khai.",
     method: "POST",
@@ -61,6 +67,21 @@ export const API_PRESETS: ApiPreset[] = [
     path: "/api/v1/analyses/writing",
     body: JSON.stringify(
       { input_text: "I have been learning English for three years." },
+      null,
+      2,
+    ),
+  },
+  {
+    name: "Tạo lộ trình 7 ngày",
+    description: "Tạo lộ trình từ mục tiêu và lịch sử học của JWT hiện tại.",
+    method: "POST",
+    path: "/api/v1/learning-paths/generate",
+    body: JSON.stringify(
+      {
+        goal: "Giao tiếp tự tin trong công việc",
+        current_level: "B1",
+        minutes_per_day: 30,
+      },
       null,
       2,
     ),

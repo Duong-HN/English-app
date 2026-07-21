@@ -28,6 +28,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    learning_paths: Mapped[list[LearningPath]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     admin_audit_logs: Mapped[list[AdminAuditLog]] = relationship(
         back_populates="admin_user",
         foreign_keys="AdminAuditLog.admin_user_id",
@@ -46,6 +50,20 @@ class Analysis(Base):
     provider: Mapped[str] = mapped_column(String(32), default="mock")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     user: Mapped[User] = relationship(back_populates="analyses")
+
+
+class LearningPath(Base):
+    __tablename__ = "learning_paths"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    goal: Mapped[str] = mapped_column(String(240))
+    current_level: Mapped[str] = mapped_column(String(8))
+    minutes_per_day: Mapped[int]
+    plan: Mapped[dict] = mapped_column(JSON)
+    provider: Mapped[str] = mapped_column(String(32), default="mock")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    user: Mapped[User] = relationship(back_populates="learning_paths")
 
 
 class AdminAuditLog(Base):

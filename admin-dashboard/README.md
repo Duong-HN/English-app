@@ -6,9 +6,10 @@ không chứa dữ liệu dashboard giả lập.
 ## Chức năng
 
 - Đăng nhập bằng JWT và chặn tài khoản không có role `admin`.
-- Tổng quan người dùng, bài phân tích và xu hướng 7 ngày.
+- Tổng quan người dùng, bài phân tích, lộ trình học và xu hướng 7 ngày.
 - Tìm kiếm, phân trang, đổi vai trò và khóa/mở tài khoản.
 - Xem chi tiết, lọc và xóa bài phân tích.
+- Tìm kiếm, xem nhiệm vụ từng ngày và kiểm duyệt lộ trình học cá nhân hóa.
 - Xem nhật ký thao tác quản trị.
 - Theo dõi trạng thái backend định kỳ.
 - Cấu hình URL backend ngay trên màn hình đăng nhập.

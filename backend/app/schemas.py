@@ -3,7 +3,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from .ai_schemas import LearningPathResult
+
 AnalysisType = Literal["reading", "writing", "speaking"]
+LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 
 
 class RegisterRequest(BaseModel):
@@ -72,6 +75,37 @@ class HistoryResponse(BaseModel):
     total: int
 
 
+class LearningPathGenerateRequest(BaseModel):
+    goal: str = Field(min_length=3, max_length=240)
+    current_level: LearningLevel
+    minutes_per_day: int = Field(ge=10, le=120)
+
+    @field_validator("goal")
+    @classmethod
+    def clean_goal(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("goal must contain at least 3 non-whitespace characters")
+        return cleaned
+
+
+class LearningPathResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    goal: str
+    current_level: LearningLevel
+    minutes_per_day: int
+    plan: LearningPathResult
+    provider: str
+    created_at: datetime
+
+
+class LearningPathListResponse(BaseModel):
+    items: list[LearningPathResponse]
+    total: int
+
+
 class MessageResponse(BaseModel):
     message: str
 
@@ -88,6 +122,8 @@ class AdminStatsResponse(BaseModel):
     new_users_last_7_days: int
     total_analyses: int
     analyses_today: int
+    total_learning_paths: int
+    learning_paths_today: int
     analyses_by_type: dict[str, int]
     analyses_last_7_days: list[AdminStatsTrendItem]
 
@@ -122,6 +158,17 @@ class AdminAnalysisResponse(AnalysisResponse):
 
 class AdminAnalysisListResponse(BaseModel):
     items: list[AdminAnalysisResponse]
+    total: int
+
+
+class AdminLearningPathResponse(LearningPathResponse):
+    user_id: str
+    user_email: EmailStr
+    user_display_name: str
+
+
+class AdminLearningPathListResponse(BaseModel):
+    items: list[AdminLearningPathResponse]
     total: int
 
 
