@@ -22,7 +22,7 @@ try {
         Pop-Location
     }
 
-    Push-Location admin-web
+    Push-Location admin-dashboard
     try {
         Invoke-Checked { npm audit --omit=dev --audit-level=high }
     }
@@ -35,9 +35,16 @@ try {
     Invoke-Checked {
         docker run --rm --volume "${root}:/repo" --workdir /repo rhysd/actionlint:1.7.12 -no-color
     }
-    Invoke-Checked { flutter build apk --release }
+    Push-Location mobile
+    try {
+        Invoke-Checked { flutter build apk --release }
+    }
+    finally {
+        Pop-Location
+    }
+
     Invoke-Checked { docker build --tag learnmate-api:release backend }
-    Invoke-Checked { docker build --tag learnmate-admin:release admin-web }
+    Invoke-Checked { docker build --tag learnmate-admin:release admin-dashboard }
 }
 finally {
     Pop-Location

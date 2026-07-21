@@ -37,6 +37,21 @@ Flutter mobile                              Admin web
                  PostgreSQL/SQLite    Mock AI or Gemini
 ```
 
+## Repository layout
+
+```text
+backend/           FastAPI, database migrations and backend tests
+mobile/            Flutter application for Android, iOS and web preview
+admin-dashboard/   Administrator dashboard and authenticated API Console
+docs/              Architecture, API, testing and deployment documentation
+scripts/           Local verification and release-readiness scripts
+docker-compose.yml Shared PostgreSQL, API and dashboard environment
+```
+
+Each application owns its source code, dependencies, tests and production
+container definition. Only shared automation, documentation and Compose files
+remain at the repository root.
+
 ## Quick start with local Python
 
 Backend:
@@ -54,16 +69,17 @@ python -m uvicorn app.main:app --reload --port 8000
 Flutter web development preview:
 
 ```powershell
+cd mobile
 flutter pub get
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
 
-Administrator web:
+Administrator dashboard:
 
 ```powershell
-cd admin-web
+cd admin-dashboard
 npm install
 npm run dev
 ```

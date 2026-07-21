@@ -54,6 +54,9 @@ jobs:
   flutter:
     name: Flutter analyze, test and Android build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2.23.0
@@ -69,22 +72,22 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: learnmate-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
 
-  admin-web:
-    name: Admin web lint, test and build
+  admin-dashboard:
+    name: Admin dashboard lint, test and build
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: admin-web
+        working-directory: admin-dashboard
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "24.14.0"
           cache: npm
-          cache-dependency-path: admin-web/package-lock.json
+          cache-dependency-path: admin-dashboard/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -106,14 +109,14 @@ jobs:
           cache-to: type=gha,mode=max
 
   admin-container:
-    name: Admin web container build
+    name: Admin dashboard container build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
-          context: admin-web
+          context: admin-dashboard
           push: false
           tags: learnmate-admin:ci
           cache-from: type=gha
