@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "LearnMate AI API"
-    app_version: str = "0.6.0"
+    app_version: str = "0.7.0"
     app_env: str = "development"
     database_url: str = "sqlite:///./learnmate.db"
     auto_create_schema: bool = True

@@ -59,3 +59,9 @@ backend/tests/__pycache__/
 mobile/android/key.properties
 mobile/android/app/*.jks
 mobile/android/app/*.keystore
+
+# Postman desktop local workspace metadata (exported collections stay tracked)
+/.postman/
+/postman/globals/
+/postman/flows/
+/postman/mocks/

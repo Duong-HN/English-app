@@ -9,8 +9,11 @@
 - JWT profile access and password-hash non-disclosure.
 - Authentication requirement on learning endpoints.
 - Analysis persistence, deletion and user isolation.
+- Learning-path generation, fixed seven-day schema, persistence, deletion and user isolation.
+- Versioned Postman assets parse successfully, cover core routes and contain no committed credentials.
 - Administrator authorization, statistics, user search and account lockout protections.
 - Cross-user analysis moderation and administrator audit logging.
+- Cross-user learning-path moderation and administrator audit logging.
 - Whitespace/input validation.
 - Alembic upgrade from an empty database.
 - Production Docker image build.
@@ -20,6 +23,7 @@
 - ESLint with React hook rules.
 - Production vinext/Cloudflare Worker build and server-rendered login verification.
 - API Console preset, custom-header validation, response-size and safe cURL tests.
+- Learning-path dashboard and API Console presets.
 - Production Node dependency audit at high severity.
 - Admin web Docker image build.
 
@@ -36,6 +40,8 @@
 - Login screen smoke test.
 - API login payload and missing auth-header check.
 - Bearer token propagation.
+- Learning-path request payload and seven-day UI rendering.
+- OCR and speech-service adapters feeding editable study text through fakes.
 - API validation-error parsing.
 - Auth controller token persistence.
 - Android debug build in CI.
@@ -48,8 +54,9 @@ Test on at least one physical Android device:
 2. Scan five clean and five difficult images; edit OCR output before submission.
 3. Submit reading and writing samples; verify structured UI and history.
 4. Dictate five English answers; verify transcript and clearly labeled limitations.
-5. Disable network during API calls and verify a readable error.
-6. Delete a history item and verify it cannot be accessed again.
+5. Generate a seven-day path after at least three analyses and verify its focus reflects recent activity.
+6. Disable network during API calls and verify a readable error.
+7. Delete a history item and verify it cannot be accessed again.
 
 Record OCR accuracy, API latency, malformed AI responses, useful-feedback rate and cost across at least 20 representative samples.
 

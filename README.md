@@ -13,9 +13,10 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 - Reading analysis with translation, vocabulary and questions.
 - Writing feedback with issues, score and rewrite.
 - Speaking transcript feedback for relevance, grammar and vocabulary.
+- Personalized seven-day learning paths generated from each learner's recent activity and persisted history.
 - Camera/gallery OCR on Android and iOS using on-device ML Kit.
 - Device speech-to-text for English transcripts.
-- Per-user persisted history and deletion.
+- Per-user persisted analysis and learning-path history with ownership-safe deletion.
 - SQLite development mode and PostgreSQL production support.
 - Alembic database migrations.
 - Deterministic Mock AI and optional Gemini adapter with structured output validation.
@@ -43,6 +44,7 @@ Flutter mobile                              Admin web
 backend/           FastAPI, database migrations and backend tests
 mobile/            Flutter application for Android, iOS and web preview
 admin-dashboard/   Administrator dashboard and authenticated API Console
+postman/           Versioned API collection and secret-free local environment
 docs/              Architecture, API, testing and deployment documentation
 scripts/           Local verification and release-readiness scripts
 docker-compose.yml Shared PostgreSQL, API and dashboard environment
@@ -76,6 +78,8 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
 
+The learning-path screen creates a measurable seven-day plan from the learner's goal, current CEFR level, available minutes and up to 20 recent analyses. Mock mode is deterministic for local testing; Gemini can generate the same validated structure when enabled.
+
 Administrator dashboard:
 
 ```powershell
@@ -93,6 +97,11 @@ docker compose up --build
 ```
 
 This starts PostgreSQL, the API on <http://localhost:8000> and LearnMate Admin on <http://localhost:3000>. API documentation is at <http://localhost:8000/docs>.
+
+For desktop API testing, import the versioned [Postman collection](postman/README.md).
+It covers health, authentication, analyses, personalized learning paths and
+administrator endpoints without storing passwords or JWTs in Git. The admin
+dashboard also includes an authenticated API Console for the same backend.
 
 Create the first Docker administrator:
 

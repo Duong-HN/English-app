@@ -1,6 +1,6 @@
 # LearnMate API
 
-FastAPI service for authentication, AI analysis and learning history.
+FastAPI service for authentication, structured AI analysis, personalized seven-day learning paths and learning history.
 
 ## Local commands
 
@@ -14,6 +14,8 @@ python -m uvicorn app.main:app --reload --port 8000
 ```
 
 Open <http://127.0.0.1:8000/docs> for Swagger UI.
+
+Learning paths are generated from the authenticated learner's recent analysis summary, validated against a fixed schema and persisted in `learning_paths`. Run Alembic before starting the API so revision `0003` is applied.
 
 ## Create the first administrator
 

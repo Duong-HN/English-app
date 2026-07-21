@@ -6,6 +6,7 @@ import {
   formatBytes,
   parseHeaderJson,
 } from "../app/lib/api-console.ts";
+import { AdminApi } from "../app/lib/api.ts";
 
 test("ships useful presets for public and administrator endpoints", () => {
   const routes = API_PRESETS.map((item) => `${item.method} ${item.path}`);
@@ -13,6 +14,8 @@ test("ships useful presets for public and administrator endpoints", () => {
   assert.ok(routes.includes("GET /api/v1/admin/stats"));
   assert.ok(routes.includes("POST /api/v1/auth/register"));
   assert.ok(routes.includes("POST /api/v1/analyses/writing"));
+  assert.ok(routes.includes("GET /api/v1/admin/learning-paths?limit=20&offset=0"));
+  assert.ok(routes.includes("POST /api/v1/learning-paths/generate"));
 });
 
 test("parses custom headers and rejects non-object values", () => {
@@ -44,4 +47,29 @@ test("creates a reproducible curl command without copying the live JWT", () => {
 test("formats response sizes", () => {
   assert.equal(formatBytes(512), "512 B");
   assert.equal(formatBytes(1536), "1.5 KB");
+});
+
+test("requests learning paths with admin authorization and encoded filters", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedAuthorization = "";
+  globalThis.fetch = async (input, init) => {
+    capturedUrl = String(input);
+    capturedAuthorization = new Headers(init?.headers).get("Authorization") ?? "";
+    return Response.json({ items: [], total: 0 });
+  };
+
+  try {
+    const api = new AdminApi("https://api.example.test/", "admin-jwt");
+    const result = await api.learningPaths({ q: "job interview", limit: 25, offset: 25 });
+
+    assert.equal(result.total, 0);
+    assert.equal(
+      capturedUrl,
+      "https://api.example.test/api/v1/admin/learning-paths?q=job+interview&limit=25&offset=25",
+    );
+    assert.equal(capturedAuthorization, "Bearer admin-jwt");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

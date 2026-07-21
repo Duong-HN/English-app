@@ -54,6 +54,7 @@ test("removes starter-only code and keeps real backend integration", async () =>
   assert.match(adminApp, /sessionStorage\.setItem/);
   assert.match(adminApp, /response\.user\.role !== "admin"/);
   assert.match(api, /\/api\/v1\/admin\/stats/);
+  assert.match(api, /\/api\/v1\/admin\/learning-paths/);
   assert.match(api, /Authorization/);
   assert.match(api, /consoleRequest/);
   assert.match(apiConsole, /JWT admin tự động/);

@@ -18,6 +18,7 @@ Release milestones:
 v0.2.0-vertical  text-first prototype
 v0.5.0-mvp       auth, OCR, STT, migrations and CI/CD-ready MVP
 v0.6.0-admin     RBAC, admin dashboard, API Console and three-service delivery
+v0.7.0-paths     personalized learning paths and local-readiness integration
 v0.8.0-rc        user validation, observability and release hardening
 v1.0.0           evaluated graduation demo
 ```

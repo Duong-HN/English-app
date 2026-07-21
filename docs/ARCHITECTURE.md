@@ -17,9 +17,9 @@ STT text is never presented as evidence of pronunciation accuracy.
 | Admin web | React 19 / Next-compatible vinext | Operations dashboard, moderation and API Console |
 | OCR | ML Kit Text Recognition | Latin text extraction on Android/iOS |
 | STT | Device speech recognition | English transcript capture |
-| API | FastAPI / Python 3.14 | Auth, validation, AI orchestration, history |
+| API | FastAPI / Python 3.14 | Auth, validation, AI orchestration, learning paths, history |
 | ORM/migrations | SQLAlchemy / Alembic | Relational persistence and versioned schema |
-| Database | SQLite dev, PostgreSQL prod | Users and analyses |
+| Database | SQLite dev, PostgreSQL prod | Users, analyses, learning paths and audit records |
 | AI | Mock or Gemini | Structured formative feedback |
 | Delivery | Docker / Cloudflare Worker / GitHub Actions / GHCR | Test, package, release and deploy mobile/API/admin |
 
@@ -35,6 +35,17 @@ API -> AI provider: prompt + JSON schema
 AI provider -> API: structured result
 API -> Database: persist analysis for user
 API -> Flutter: result
+```
+
+Learning-path flow:
+
+```text
+Learner -> Flutter: goal + CEFR level + minutes per day
+Flutter -> API: authenticated generation request
+API -> Database: summarize up to 20 recent analyses
+API -> Mock/Gemini: summary + fixed seven-day JSON schema
+API -> Database: validate and persist learner-owned path
+API -> Flutter: focus areas, seven tasks and measurable checkpoints
 ```
 
 Administrator flow:
@@ -65,6 +76,12 @@ API -> Web: operational data or structured API Console response
 `id`, `admin_user_id`, `action`, `target_type`, `target_id`, `details`, `created_at`
 
 Administrative authorization is enforced by the API. The dashboard is only a client and cannot grant itself access. Audit entries record state changes and moderation actions while excluding passwords, tokens and full learner submissions.
+
+### learning_paths
+
+`id`, `user_id`, `goal`, `current_level`, `minutes_per_day`, `plan`, `provider`, `created_at`
+
+`learning_paths.user_id` cascades on user deletion. The JSON plan is schema-validated before persistence and always contains seven daily tasks. Personalization is derived from aggregate counts, scores and issue titles rather than sending full historical submissions to the provider.
 
 ## Security boundaries
 

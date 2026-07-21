@@ -66,6 +66,25 @@ class ApiClient {
     return (payload['items'] as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
+  Future<Map<String, dynamic>> generateLearningPath({
+    required String goal,
+    required String currentLevel,
+    required int minutesPerDay,
+  }) {
+    return _post(
+      '/api/v1/learning-paths/generate',
+      body: {
+        'goal': goal,
+        'current_level': currentLevel,
+        'minutes_per_day': minutesPerDay,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> currentLearningPath() {
+    return _get('/api/v1/learning-paths/current');
+  }
+
   Future<void> deleteAnalysis(String id) async {
     final response = await _client
         .delete(Uri.parse('$baseUrl/api/v1/analyses/$id'), headers: _headers())

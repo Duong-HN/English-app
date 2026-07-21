@@ -56,6 +56,7 @@ def test_admin_can_view_stats_and_search_users(client, db_session):
 
     assert stats.status_code == 200
     assert stats.json()["total_users"] >= 2
+    assert stats.json()["total_learning_paths"] >= 0
     assert len(stats.json()["analyses_last_7_days"]) == 7
     assert users.status_code == 200
     assert users.json()["total"] == 1

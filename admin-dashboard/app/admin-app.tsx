@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminAnalysis,
   AdminApi,
+  AdminLearningPath,
   AdminStats,
   AdminUser,
   ApiError,
@@ -14,7 +15,7 @@ import {
 import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "analyses" | "audit" | "console";
+type View = "overview" | "users" | "analyses" | "paths" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
@@ -24,8 +25,9 @@ const navItems: Array<{ id: View; label: string; short: string }> = [
   { id: "overview", label: "Tổng quan", short: "01" },
   { id: "users", label: "Người dùng", short: "02" },
   { id: "analyses", label: "Bài phân tích", short: "03" },
-  { id: "audit", label: "Nhật ký quản trị", short: "04" },
-  { id: "console", label: "API Console", short: "05" },
+  { id: "paths", label: "Lộ trình học", short: "04" },
+  { id: "audit", label: "Nhật ký quản trị", short: "05" },
+  { id: "console", label: "API Console", short: "06" },
 ];
 
 function formatDate(value: string | null, withTime = true) {
@@ -320,6 +322,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           {view === "overview" && <OverviewPage api={api} onNavigate={setView} />}
           {view === "users" && <UsersPage api={api} currentUser={session.user} />}
           {view === "analyses" && <AnalysesPage api={api} />}
+          {view === "paths" && <LearningPathsPage api={api} />}
           {view === "audit" && <AuditPage api={api} />}
           {view === "console" && <ApiConsole api={api} baseUrl={session.baseUrl} />}
         </main>
@@ -354,7 +357,7 @@ function OverviewPage({ api, onNavigate }: { api: AdminApi; onNavigate: (view: V
     { label: "Tổng người dùng", value: stats.total_users, note: `+${stats.new_users_last_7_days} trong 7 ngày`, tone: "blue" },
     { label: "Đang hoạt động", value: stats.active_users, note: `${stats.admin_users} quản trị viên`, tone: "green" },
     { label: "Lượt phân tích", value: stats.total_analyses, note: `${stats.analyses_today} lượt hôm nay`, tone: "purple" },
-    { label: "Tỷ lệ hoạt động", value: `${Math.round((stats.active_users / Math.max(1, stats.total_users)) * 100)}%`, note: "Tài khoản đang mở", tone: "amber" },
+    { label: "Lộ trình học", value: stats.total_learning_paths, note: `${stats.learning_paths_today} lộ trình hôm nay`, tone: "amber" },
   ];
 
   return (
@@ -567,6 +570,85 @@ function AnalysisDialog({ item, onClose, onDelete }: { item: AdminAnalysis; onCl
   );
 }
 
+function LearningPathsPage({ api }: { api: AdminApi }) {
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [data, setData] = useState<{ items: AdminLearningPath[]; total: number } | null>(null);
+  const [selected, setSelected] = useState<AdminLearningPath | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.learningPaths({ q: appliedQuery, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+      .then((result) => { if (active) { setData(result); setError(null); } })
+      .catch((reason) => active && setError(readableError(reason)));
+    return () => { active = false; };
+  }, [api, appliedQuery, page, reload]);
+
+  function search(event: FormEvent) {
+    event.preventDefault();
+    setPage(0);
+    setAppliedQuery(query.trim());
+    setReload((value) => value + 1);
+  }
+
+  async function remove(item: AdminLearningPath) {
+    if (!window.confirm("Xóa lộ trình này? Thao tác sẽ được ghi audit log.")) return;
+    try {
+      await api.deleteLearningPath(item.id);
+      setSelected(null);
+      setReload((value) => value + 1);
+    } catch (reason) {
+      setError(readableError(reason));
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+  return (
+    <div className="page-stack">
+      <section className="section-heading"><div><p className="eyebrow blue">Personalized learning</p><h2>Lộ trình học 7 ngày</h2><p className="muted">Theo dõi mục tiêu, mức độ cá nhân hóa và nhiệm vụ mà học viên nhận được.</p></div><span className="count-badge">{data?.total ?? 0} lộ trình</span></section>
+      <form className="filter-bar path-filter" onSubmit={search}>
+        <label className="search-field"><span className="sr-only">Tìm lộ trình</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo mục tiêu, tên hoặc email…" /></label>
+        <button className="secondary-button" type="submit">Tìm kiếm</button>
+      </form>
+      {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+      {!data ? <LoadingState label="Đang tải lộ trình học…" /> : data.items.length === 0 ? <EmptyState message="Chưa có lộ trình học phù hợp." /> : (
+        <section className="analysis-grid">
+          {data.items.map((item) => (
+            <article className="analysis-card path-card" key={item.id}>
+              <div className="analysis-card-top"><span className="type-badge path">{item.current_level}</span><span className="provider-badge">{item.provider}</span></div>
+              <h3>{item.goal}</h3>
+              <p className="path-summary">{item.plan.summary}</p>
+              <div className="analysis-owner"><span className="mini-avatar">{initials(item.user_display_name)}</span><span><strong>{item.user_display_name}</strong><small>{item.user_email}</small></span></div>
+              <div className="analysis-meta"><span>{formatDate(item.created_at)}</span><strong>{item.minutes_per_day} phút/ngày</strong></div>
+              <button className="card-link" type="button" onClick={() => setSelected(item)}>Xem 7 nhiệm vụ</button>
+            </article>
+          ))}
+          <div className="full-span"><Pagination page={page} totalPages={totalPages} onChange={setPage} /></div>
+        </section>
+      )}
+      {selected && <LearningPathDialog item={selected} onClose={() => setSelected(null)} onDelete={() => void remove(selected)} />}
+    </div>
+  );
+}
+
+function LearningPathDialog({ item, onClose, onDelete }: { item: AdminLearningPath; onClose: () => void; onDelete: () => void }) {
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="path-dialog-title">
+        <header><div><p className="eyebrow blue">Learning path detail</p><h2 id="path-dialog-title">{item.goal}</h2></div><button className="close-button" type="button" onClick={onClose} aria-label="Đóng chi tiết">×</button></header>
+        <div className="detail-facts"><span><small>Học viên</small><strong>{item.user_email}</strong></span><span><small>Trình độ</small><strong>{item.current_level}</strong></span><span><small>Thời lượng</small><strong>{item.minutes_per_day} phút/ngày</strong></span><span><small>Provider</small><strong>{item.provider}</strong></span></div>
+        <div className="detail-section"><h3>Mục tiêu tuần</h3><p>{item.plan.weekly_goal}</p></div>
+        <div className="detail-section"><h3>Trọng tâm cá nhân hóa</h3><div className="path-chips">{item.plan.focus_areas.map((focus) => <span key={focus}>{focus}</span>)}</div></div>
+        <div className="detail-section"><h3>Nhiệm vụ từng ngày</h3><ol className="path-task-list">{item.plan.daily_tasks.map((task) => <li key={task.day}><span>{task.day}</span><div><strong>{task.title} · {task.duration_minutes} phút</strong><p>{task.activity}</p><small>Đạt khi: {task.success_criteria}</small></div></li>)}</ol></div>
+        <footer><button className="danger-button" type="button" onClick={onDelete}>Xóa lộ trình</button><button className="secondary-button" type="button" onClick={onClose}>Đóng</button></footer>
+      </section>
+    </div>
+  );
+}
+
 function AuditPage({ api }: { api: AdminApi }) {
   const [logs, setLogs] = useState<AuditLog[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -596,7 +678,7 @@ function AuditPage({ api }: { api: AdminApi }) {
 }
 
 function AuditRow({ log, expanded = false }: { log: AuditLog; expanded?: boolean }) {
-  const labels: Record<string, string> = { "user.updated": "Cập nhật người dùng", "analysis.deleted": "Xóa bài phân tích" };
+  const labels: Record<string, string> = { "user.updated": "Cập nhật người dùng", "analysis.deleted": "Xóa bài phân tích", "learning_path.deleted": "Xóa lộ trình học" };
   return (
     <div className={`audit-row ${expanded ? "expanded" : ""}`}>
       <span className="audit-mark">{log.action.startsWith("user") ? "U" : "A"}</span>

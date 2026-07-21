@@ -2,6 +2,29 @@
 
 All notable changes to LearnMate AI are recorded here.
 
+## 0.7.0 - 2026-07-22
+
+### Added
+
+- Persisted, learner-owned seven-day learning paths generated from goals, CEFR level, daily time and recent analysis summaries.
+- Deterministic Mock and structured Gemini learning-path providers with exactly seven measurable daily tasks.
+- Mobile learning-path screen with focus areas, personalization notes, daily activities and checkpoints.
+- Administrator learning-path metrics, search, detail view, moderated deletion and audit records.
+- API Console presets and automated backend, dashboard and Flutter coverage for the new flow.
+- Versioned Postman collection and local environment for authentication, analyses, learning paths and administration APIs.
+
+### Changed
+
+- PostgreSQL schema advances to Alembic revision `0003`.
+- Mobile, backend and administrator web versions advance to `0.7.0`.
+
+### Security
+
+- Learning paths are isolated by authenticated user ID; administrator deletion is server-authorized and audited.
+- Personalization sends aggregate recent activity to the AI provider instead of full historical submissions.
+- Learning-path prompts explicitly treat goals and activity summaries as untrusted data that cannot override grading rules.
+- Dashboard dependency resolution overrides vulnerable transitive PostCSS releases with patched `8.5.21`.
+
 ## 0.6.0 - 2026-07-21
 
 ### Added
