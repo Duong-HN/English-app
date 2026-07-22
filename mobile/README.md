@@ -2,7 +2,8 @@
 
 Flutter application for learner registration, authentication, camera/gallery
 OCR, English speech-to-text, AI-assisted reading/writing/speaking feedback,
-personalized seven-day learning paths and personal learning history.
+personalized seven-day learning paths, classroom participation, assignment
+submission and personal learning history.
 
 ## Run locally
 
@@ -20,6 +21,11 @@ development computer's LAN address with `--dart-define=API_BASE_URL=...`.
 The speaking flow grades transcript content, grammar and vocabulary. It does not
 claim to grade pronunciation from speech-to-text. The learning-path tab combines
 the learner's goal, CEFR level, available daily time and recent backend history.
+The classroom tab lets a learner enter a teacher-provided join code, track
+approval, view open or closed assignments and submit one of their matching AI
+analyses only while an assignment is open and not overdue. Paused classes stay
+visible without exposing their assignments. Joining a class does not expose
+unrelated private learning history.
 
 ## Quality checks
 

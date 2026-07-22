@@ -63,7 +63,39 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> history() async {
     final payload = await _get('/api/v1/analyses');
-    return (payload['items'] as List<dynamic>).cast<Map<String, dynamic>>();
+    return _items(payload);
+  }
+
+  Future<List<Map<String, dynamic>>> myClasses() async {
+    return _allPages('/api/v1/classes/mine');
+  }
+
+  Future<Map<String, dynamic>> joinClass(String joinCode) {
+    return _post('/api/v1/classes/join', body: {'join_code': joinCode});
+  }
+
+  Future<void> leaveClass(String classId) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl/api/v1/classes/$classId/membership'),
+          headers: _headers(),
+        )
+        .timeout(_timeout);
+    _decodeSuccess(response);
+  }
+
+  Future<List<Map<String, dynamic>>> classAssignments(String classId) async {
+    return _allPages('/api/v1/classes/$classId/assignments');
+  }
+
+  Future<Map<String, dynamic>> submitAssignment({
+    required String assignmentId,
+    required String analysisId,
+  }) {
+    return _post(
+      '/api/v1/assignments/$assignmentId/submissions',
+      body: {'analysis_id': analysisId},
+    );
   }
 
   Future<Map<String, dynamic>> generateLearningPath({
@@ -97,6 +129,28 @@ class ApiClient {
         .get(Uri.parse('$baseUrl$path'), headers: _headers())
         .timeout(_timeout);
     return _decodeSuccess(response);
+  }
+
+  Future<List<Map<String, dynamic>>> _allPages(String path) async {
+    const pageSize = 100;
+    final result = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final separator = path.contains('?') ? '&' : '?';
+      final payload = await _get(
+        '$path${separator}limit=$pageSize&offset=$offset',
+      );
+      final page = _items(payload);
+      result.addAll(page);
+      final totalValue = payload['total'];
+      final total = totalValue is num ? totalValue.toInt() : null;
+      if (page.isEmpty ||
+          page.length < pageSize ||
+          (total != null && result.length >= total)) {
+        return result;
+      }
+      offset += page.length;
+    }
   }
 
   Future<Map<String, dynamic>> _post(
@@ -151,6 +205,12 @@ class ApiClient {
       }
     }
     return 'Request failed';
+  }
+
+  List<Map<String, dynamic>> _items(Map<String, dynamic> payload) {
+    return (payload['items'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
   }
 
   void close() => _client.close();

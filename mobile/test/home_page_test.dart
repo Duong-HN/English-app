@@ -44,14 +44,17 @@ class FakeSpeechService implements SpeechService {
   Future<void> stop() async => _listening = false;
 }
 
-AuthController authenticatedController(ApiClient apiClient) {
+AuthController authenticatedController(
+  ApiClient apiClient, {
+  String role = 'learner',
+}) {
   apiClient.accessToken = 'learner-token';
   return AuthController(apiClient: apiClient, tokenStore: MemoryTokenStore())
     ..user = {
       'id': 'learner-1',
       'email': 'learner@example.com',
       'display_name': 'Test Learner',
-      'role': 'learner',
+      'role': role,
     };
 }
 
@@ -226,5 +229,44 @@ void main() {
     expect(find.text('A2'), findsOneWidget);
     expect(find.text('20 phút'), findsOneWidget);
     expect(find.text('Lộ trình đã lưu.'), findsOneWidget);
+  });
+
+  testWidgets('home navigation exposes the state-preserving classroom tab', (
+    tester,
+  ) async {
+    final apiClient = ApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        if (request.url.path == '/api/v1/classes/mine') {
+          return jsonResponse({'items': [], 'total': 0}, 200);
+        }
+        if (request.url.path == '/api/v1/learning-paths/current') {
+          return jsonResponse({'detail': 'Learning path not found'}, 404);
+        }
+        return jsonResponse({'items': [], 'total': 0}, 200);
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(
+          apiClient: apiClient,
+          authController: authenticatedController(apiClient),
+          ocrService: FakeOcrService(),
+          speechService: FakeSpeechService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationDestination), findsNWidgets(5));
+    await tester.tap(find.text('Lớp học'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('classes-page')), findsOneWidget);
+    expect(find.byKey(const Key('join-class')), findsOneWidget);
+    expect(
+      find.text('Bạn chưa tham gia lớp nào. Nhập mã lớp để bắt đầu.'),
+      findsOneWidget,
+    );
   });
 }

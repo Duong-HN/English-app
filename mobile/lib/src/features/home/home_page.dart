@@ -5,6 +5,7 @@ import '../../core/api_client.dart';
 import '../../core/auth_controller.dart';
 import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
+import '../classes/classes_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -26,6 +27,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _learningPathKey = GlobalKey<_LearningPathPageState>();
+  final _classesKey = GlobalKey<ClassesPageState>();
   final _historyKey = GlobalKey<_HistoryPageState>();
   late final OcrService _ocrService;
   late final SpeechService _speechService;
@@ -44,6 +46,11 @@ class _HomePageState extends State<HomePage> {
         speechService: _speechService,
       ),
       _LearningPathPage(key: _learningPathKey, apiClient: widget.apiClient),
+      ClassesPage(
+        key: _classesKey,
+        apiClient: widget.apiClient,
+        isLearner: widget.authController.user?['role'] == 'learner',
+      ),
       _HistoryPage(key: _historyKey, apiClient: widget.apiClient),
       _ProfilePage(authController: widget.authController),
     ];
@@ -52,7 +59,8 @@ class _HomePageState extends State<HomePage> {
   void _selectPage(int index) {
     setState(() => _selectedIndex = index);
     if (index == 1) _learningPathKey.currentState?.refresh();
-    if (index == 2) _historyKey.currentState?.refresh();
+    if (index == 2) _classesKey.currentState?.refresh();
+    if (index == 3) _historyKey.currentState?.refresh();
   }
 
   @override
@@ -74,6 +82,12 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.route_outlined),
             selectedIcon: Icon(Icons.route),
             label: 'Lộ trình',
+          ),
+          NavigationDestination(
+            key: Key('classes-tab'),
+            icon: Icon(Icons.groups_outlined),
+            selectedIcon: Icon(Icons.groups),
+            label: 'Lớp học',
           ),
           NavigationDestination(icon: Icon(Icons.history), label: 'Lịch sử'),
           NavigationDestination(
