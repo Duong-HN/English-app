@@ -1,6 +1,6 @@
 # LearnMate API
 
-FastAPI service for authentication, structured AI analysis, personalized seven-day learning paths and learning history.
+FastAPI service for authentication, structured AI analysis, personalized seven-day learning paths, classrooms, assignments and learning history.
 
 ## Local commands
 
@@ -15,7 +15,7 @@ python -m uvicorn app.main:app --reload --port 8000
 
 Open <http://127.0.0.1:8000/docs> for Swagger UI.
 
-Learning paths are generated from the authenticated learner's recent analysis summary, validated against a fixed schema and persisted in `learning_paths`. Run Alembic before starting the API so revision `0003` is applied.
+Learning paths are generated from the authenticated learner's recent analysis summary, validated against a fixed schema and persisted in `learning_paths`. Classroom membership and assignment submissions are relational and preserve the boundary between private analyses and work explicitly submitted to a class. Run Alembic before starting the API so revision `0004` is applied.
 
 ## Create the first administrator
 
@@ -27,7 +27,7 @@ python -m app.cli create-admin --email admin@example.com --display-name "LearnMa
 Remove-Item Env:ADMIN_PASSWORD
 ```
 
-The command creates a new administrator or safely promotes an existing account. Public registration always creates a learner account.
+The command creates a new administrator or safely promotes an existing account. Public registration always creates a learner account. Use the administrator user-management API or web console to promote a registered account to `teacher`.
 
 ## Quality checks
 

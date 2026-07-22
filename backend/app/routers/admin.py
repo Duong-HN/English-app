@@ -2,11 +2,20 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_admin
-from ..models import AdminAuditLog, Analysis, LearningPath, User, utc_now
+from ..models import (
+    AdminAuditLog,
+    Analysis,
+    AssignmentSubmission,
+    Classroom,
+    LearningPath,
+    User,
+    utc_now,
+)
 from ..schemas import (
     AdminAnalysisListResponse,
     AdminAnalysisResponse,
@@ -92,7 +101,9 @@ def _record_audit(
 
 
 def _ensure_another_active_admin(db: Session, target: User, update: AdminUserUpdate) -> None:
-    removes_admin_access = target.role == "admin" and (update.role == "learner" or update.is_active is False)
+    removes_admin_access = target.role == "admin" and (
+        (update.role is not None and update.role != "admin") or update.is_active is False
+    )
     if not removes_admin_access:
         return
     active_admins = (
@@ -108,6 +119,27 @@ def _ensure_another_active_admin(db: Session, target: User, update: AdminUserUpd
         )
 
 
+def _ensure_teacher_has_no_active_classes(db: Session, target: User, update: AdminUserUpdate) -> None:
+    removes_teacher_access = target.role == "teacher" and (
+        (update.role is not None and update.role != "teacher") or update.is_active is False
+    )
+    if not removes_teacher_access:
+        return
+    active_classes = (
+        db.scalar(
+            select(func.count())
+            .select_from(Classroom)
+            .where(Classroom.teacher_id == target.id, Classroom.is_active.is_(True))
+        )
+        or 0
+    )
+    if active_classes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pause the teacher's active classes before disabling the account or changing its role",
+        )
+
+
 @router.get("/stats", response_model=AdminStatsResponse)
 def stats(
     db: Session = Depends(get_db),
@@ -119,6 +151,7 @@ def stats(
     total_users = db.scalar(select(func.count()).select_from(User)) or 0
     active_users = db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))) or 0
     admin_users = db.scalar(select(func.count()).select_from(User).where(User.role == "admin")) or 0
+    teacher_users = db.scalar(select(func.count()).select_from(User).where(User.role == "teacher")) or 0
     new_users = (
         db.scalar(select(func.count()).select_from(User).where(User.created_at >= seven_days_ago)) or 0
     )
@@ -129,6 +162,10 @@ def stats(
     total_learning_paths = db.scalar(select(func.count()).select_from(LearningPath)) or 0
     learning_paths_today = (
         db.scalar(select(func.count()).select_from(LearningPath).where(LearningPath.created_at >= today)) or 0
+    )
+    total_classes = db.scalar(select(func.count()).select_from(Classroom)) or 0
+    active_classes = (
+        db.scalar(select(func.count()).select_from(Classroom).where(Classroom.is_active.is_(True))) or 0
     )
 
     type_rows = db.execute(select(Analysis.type, func.count()).group_by(Analysis.type)).all()
@@ -151,11 +188,14 @@ def stats(
         total_users=total_users,
         active_users=active_users,
         admin_users=admin_users,
+        teacher_users=teacher_users,
         new_users_last_7_days=new_users,
         total_analyses=total_analyses,
         analyses_today=analyses_today,
         total_learning_paths=total_learning_paths,
         learning_paths_today=learning_paths_today,
+        total_classes=total_classes,
+        active_classes=active_classes,
         analyses_by_type=analyses_by_type,
         analyses_last_7_days=trend,
     )
@@ -164,7 +204,7 @@ def stats(
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     q: str | None = Query(default=None, max_length=120),
-    role: str | None = Query(default=None, pattern="^(learner|admin)$"),
+    role: str | None = Query(default=None, pattern="^(learner|teacher|admin)$"),
     is_active: bool | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -207,7 +247,9 @@ def update_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    target = db.get(User, user_id)
+    target = db.scalar(
+        select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+    )
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if target.id == admin.id and (
@@ -218,6 +260,7 @@ def update_user(
             detail="Administrators cannot remove their own access",
         )
     _ensure_another_active_admin(db, target, update)
+    _ensure_teacher_has_no_active_classes(db, target, update)
 
     changes: dict[str, dict[str, str | bool]] = {}
     if update.is_active is not None and update.is_active != target.is_active:
@@ -304,6 +347,14 @@ def delete_analysis(
     analysis = db.get(Analysis, analysis_id)
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    linked_submission = db.scalar(
+        select(AssignmentSubmission.id).where(AssignmentSubmission.analysis_id == analysis.id).limit(1)
+    )
+    if linked_submission is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Analysis is linked to an assignment submission",
+        )
     _record_audit(
         db,
         admin,
@@ -313,7 +364,14 @@ def delete_analysis(
         details={"user_id": analysis.user_id, "analysis_type": analysis.type},
     )
     db.delete(analysis)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Analysis is linked to an assignment submission",
+        ) from exc
     return MessageResponse(message="Analysis deleted by administrator")
 
 

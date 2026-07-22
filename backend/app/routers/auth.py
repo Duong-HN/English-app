@@ -28,6 +28,7 @@ def register(
         email=email,
         password_hash=hash_password(request.password),
         display_name=request.display_name,
+        role="learner",
     )
     db.add(user)
     try:

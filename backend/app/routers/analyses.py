@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..ai import build_provider
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Analysis, User
+from ..models import Analysis, AssignmentSubmission, User
 from ..schemas import (
     AnalysisRequest,
     AnalysisResponse,
@@ -86,6 +87,21 @@ def delete_analysis(
     analysis = db.scalar(select(Analysis).where(Analysis.id == analysis_id, Analysis.user_id == user.id))
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    linked_submission = db.scalar(
+        select(AssignmentSubmission.id).where(AssignmentSubmission.analysis_id == analysis.id).limit(1)
+    )
+    if linked_submission is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Analysis is linked to an assignment submission",
+        )
     db.delete(analysis)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Analysis is linked to an assignment submission",
+        ) from exc
     return MessageResponse(message="Analysis deleted")

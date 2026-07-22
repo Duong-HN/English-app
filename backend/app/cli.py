@@ -6,7 +6,7 @@ from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import func, select
 
 from .db import SessionLocal
-from .models import User, utc_now
+from .models import Classroom, User, utc_now
 from .security import hash_password
 
 
@@ -21,7 +21,7 @@ def create_admin(email: str, display_name: str) -> None:
     normalized_email = _normalized_email(email)
     password = os.getenv("ADMIN_PASSWORD")
     with SessionLocal() as db:
-        user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
+        user = db.scalar(select(User).where(func.lower(User.email) == normalized_email).with_for_update())
         if user is None:
             password = password or getpass("New administrator password: ")
             if len(password) < 8 or len(password) > 128:
@@ -37,6 +37,17 @@ def create_admin(email: str, display_name: str) -> None:
             db.add(user)
             action = "created"
         else:
+            if user.role == "teacher":
+                active_classes = (
+                    db.scalar(
+                        select(func.count())
+                        .select_from(Classroom)
+                        .where(Classroom.teacher_id == user.id, Classroom.is_active.is_(True))
+                    )
+                    or 0
+                )
+                if active_classes:
+                    raise SystemExit("Pause the teacher's active classes before promoting the account")
             user.role = "admin"
             user.is_active = True
             user.display_name = display_name.strip() or user.display_name

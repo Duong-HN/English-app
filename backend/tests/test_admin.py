@@ -18,10 +18,10 @@ def auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def promote(db_session, email: str) -> None:
+def promote(db_session, email: str, role: str = "admin") -> None:
     user = db_session.scalar(select(User).where(func.lower(User.email) == email.lower()))
     assert user is not None
-    user.role = "admin"
+    user.role = role
     db_session.commit()
 
 
@@ -48,7 +48,9 @@ def test_learner_cannot_access_admin_api(client):
 def test_admin_can_view_stats_and_search_users(client, db_session):
     admin = register(client, "stats-admin@example.com")
     register(client, "searchable-learner@example.com")
+    teacher = register(client, "stats-teacher@example.com")
     promote(db_session, "stats-admin@example.com")
+    promote(db_session, "stats-teacher@example.com", "teacher")
     headers = auth_header(admin["access_token"])
 
     stats = client.get("/api/v1/admin/stats", headers=headers)
@@ -57,10 +59,16 @@ def test_admin_can_view_stats_and_search_users(client, db_session):
     assert stats.status_code == 200
     assert stats.json()["total_users"] >= 2
     assert stats.json()["total_learning_paths"] >= 0
+    assert stats.json()["teacher_users"] >= 1
+    assert stats.json()["total_classes"] >= 0
+    assert stats.json()["active_classes"] >= 0
     assert len(stats.json()["analyses_last_7_days"]) == 7
     assert users.status_code == 200
     assert users.json()["total"] == 1
     assert users.json()["items"][0]["email"] == "searchable-learner@example.com"
+    teachers = client.get("/api/v1/admin/users?role=teacher", headers=headers)
+    assert teachers.status_code == 200
+    assert any(item["id"] == teacher["user"]["id"] for item in teachers.json()["items"])
 
 
 def test_admin_can_disable_user_and_action_is_audited(client, db_session):
