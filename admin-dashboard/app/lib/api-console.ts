@@ -28,6 +28,12 @@ export const API_PRESETS: ApiPreset[] = [
     path: "/api/v1/admin/stats",
   },
   {
+    name: "Lớp học đang quản lý",
+    description: "Danh sách lớp của giáo viên hoặc toàn hệ thống với admin.",
+    method: "GET",
+    path: "/api/v1/classes/managed?limit=20&offset=0",
+  },
+  {
     name: "Danh sách người dùng",
     description: "Phân trang 20 tài khoản đầu tiên.",
     method: "GET",

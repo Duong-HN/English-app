@@ -1,8 +1,18 @@
+export type UserRole = "learner" | "teacher" | "admin";
+export type AnalysisType = "reading" | "writing" | "speaking";
+export type CefrLevel = "A1" | "A2" | "B1" | "B2" | "C1";
+
+export function isManagementRole(
+  role: UserRole,
+): role is Extract<UserRole, "teacher" | "admin"> {
+  return role === "teacher" || role === "admin";
+}
+
 export type AdminUser = {
   id: string;
   email: string;
   display_name: string;
-  role: "learner" | "admin";
+  role: UserRole;
   level: string | null;
   is_active: boolean;
   created_at: string;
@@ -27,6 +37,9 @@ export type AdminStats = {
   learning_paths_today: number;
   analyses_by_type: Record<string, number>;
   analyses_last_7_days: Array<{ date: string; count: number }>;
+  teacher_users?: number;
+  total_classes?: number;
+  active_classes?: number;
 };
 
 export type AdminAnalysis = {
@@ -34,7 +47,7 @@ export type AdminAnalysis = {
   user_id: string;
   user_email: string;
   user_display_name: string;
-  type: "reading" | "writing" | "speaking";
+  type: AnalysisType;
   input_text: string;
   result: Record<string, unknown>;
   score: number | null;
@@ -57,7 +70,7 @@ export type AdminLearningPath = {
   user_email: string;
   user_display_name: string;
   goal: string;
-  current_level: "A1" | "A2" | "B1" | "B2" | "C1";
+  current_level: CefrLevel;
   minutes_per_day: number;
   plan: {
     summary: string;
@@ -81,6 +94,104 @@ export type AuditLog = {
   details: Record<string, unknown>;
   created_at: string;
 };
+
+export type ManagedClass = {
+  id: string;
+  teacher_id: string;
+  teacher_email: string;
+  teacher_display_name: string;
+  name: string;
+  description: string;
+  target_level: CefrLevel | null;
+  join_code: string;
+  is_active: boolean;
+  active_member_count: number;
+  pending_member_count: number;
+  assignment_count: number;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type ClassMember = {
+  id: string;
+  class_id: string;
+  learner_id: string;
+  learner_email: string;
+  learner_display_name: string;
+  learner_level: string | null;
+  learner_is_active: boolean;
+  status: "pending" | "active" | "removed";
+  joined_at: string;
+  approved_at: string | null;
+  updated_at: string | null;
+};
+
+export type ClassAssignment = {
+  id: string;
+  class_id: string;
+  class_name: string;
+  created_by_id: string;
+  created_by_display_name: string;
+  title: string;
+  instructions: string;
+  skill_type: AnalysisType;
+  target_level: CefrLevel | null;
+  due_at: string | null;
+  status: "published" | "closed";
+  submission_count: number;
+  my_submission_count: number;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type SubmittedAnalysis = {
+  id: string;
+  type: AnalysisType;
+  input_text: string;
+  result: Record<string, unknown>;
+  score: number | null;
+  provider: string;
+  created_at: string;
+};
+
+export type AssignmentSubmission = {
+  id: string;
+  assignment_id: string;
+  learner_id: string;
+  learner_email: string;
+  learner_display_name: string;
+  analysis_id: string;
+  attempt_number: number;
+  status: "submitted";
+  submitted_at: string;
+  analysis: SubmittedAnalysis;
+};
+
+export type ClassCreateInput = {
+  name: string;
+  description: string;
+  target_level: CefrLevel | null;
+};
+
+export type ClassUpdateInput = Partial<ClassCreateInput> & {
+  is_active?: boolean;
+};
+
+export type AssignmentCreateInput = {
+  title: string;
+  instructions: string;
+  skill_type: AnalysisType;
+  target_level?: CefrLevel | null;
+  due_at?: string | null;
+  status?: "published" | "closed";
+};
+
+export type AssignmentUpdateInput = Partial<
+  Pick<
+    AssignmentCreateInput,
+    "title" | "instructions" | "target_level" | "due_at" | "status"
+  >
+>;
 
 export type ApiConsoleMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -279,7 +390,7 @@ export class AdminApi {
     );
   }
 
-  updateUser(userId: string, update: { is_active?: boolean; role?: string }) {
+  updateUser(userId: string, update: { is_active?: boolean; role?: UserRole }) {
     return this.request<AdminUser>(`/api/v1/admin/users/${userId}`, {
       method: "PATCH",
       body: JSON.stringify(update),
@@ -320,6 +431,97 @@ export class AdminApi {
   auditLogs(limit = 50) {
     return this.request<Page<AuditLog>>(
       `/api/v1/admin/audit-logs${queryString({ limit })}`,
+    );
+  }
+
+  managedClasses(filters: { limit?: number; offset?: number } = {}) {
+    return this.request<Page<ManagedClass>>(
+      `/api/v1/classes/managed${queryString(filters)}`,
+    );
+  }
+
+  createClass(input: ClassCreateInput) {
+    return this.request<ManagedClass>("/api/v1/classes", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateClass(classId: string, input: ClassUpdateInput) {
+    return this.request<ManagedClass>(`/api/v1/classes/${classId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  rotateClassJoinCode(classId: string) {
+    return this.request<{ join_code: string; updated_at: string }>(
+      `/api/v1/classes/${classId}/join-code/rotate`,
+      { method: "POST" },
+    );
+  }
+
+  classMembers(
+    classId: string,
+    filters: { limit?: number; offset?: number } = {},
+  ) {
+    return this.request<Page<ClassMember>>(
+      `/api/v1/classes/${classId}/members${queryString(filters)}`,
+    );
+  }
+
+  updateClassMember(
+    classId: string,
+    membershipId: string,
+    status: "active" | "removed",
+  ) {
+    return this.request<ClassMember>(
+      `/api/v1/classes/${classId}/members/${membershipId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      },
+    );
+  }
+
+  classAssignments(
+    classId: string,
+    filters: { limit?: number; offset?: number } = {},
+  ) {
+    return this.request<Page<ClassAssignment>>(
+      `/api/v1/classes/${classId}/assignments${queryString(filters)}`,
+    );
+  }
+
+  createClassAssignment(classId: string, input: AssignmentCreateInput) {
+    return this.request<ClassAssignment>(
+      `/api/v1/classes/${classId}/assignments`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
+  }
+
+  updateClassAssignment(
+    assignmentId: string,
+    input: AssignmentUpdateInput,
+  ) {
+    return this.request<ClassAssignment>(
+      `/api/v1/assignments/${assignmentId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    );
+  }
+
+  assignmentSubmissions(
+    assignmentId: string,
+    filters: { limit?: number; offset?: number } = {},
+  ) {
+    return this.request<Page<AssignmentSubmission>>(
+      `/api/v1/assignments/${assignmentId}/submissions${queryString(filters)}`,
     );
   }
 }

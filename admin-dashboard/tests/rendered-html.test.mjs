@@ -33,17 +33,18 @@ test("server-renders the LearnMate administrator login", async () => {
   assert.match(html, /<title>Dashboard \| LearnMate Admin<\/title>/i);
   assert.match(html, /Quản lý lớp học AI bằng dữ liệu thật\./);
   assert.match(html, /Đăng nhập hệ thống/);
-  assert.match(html, /Email quản trị/);
+  assert.match(html, /Email giáo viên hoặc quản trị/);
   assert.match(html, /Vào dashboard/);
   assert.match(html, /Đang kiểm tra phiên đăng nhập trước/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/);
 });
 
 test("removes starter-only code and keeps real backend integration", async () => {
-  const [page, layout, adminApp, api, apiConsole, packageJson] = await Promise.all([
+  const [page, layout, adminApp, classesPage, api, apiConsole, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/classes-page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api-console.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -52,9 +53,24 @@ test("removes starter-only code and keeps real backend integration", async () =>
   assert.match(page, /<AdminApp defaultApiBaseUrl=\{defaultApiBaseUrl\}/);
   assert.match(layout, /default: "LearnMate Admin"/);
   assert.match(adminApp, /sessionStorage\.setItem/);
-  assert.match(adminApp, /response\.user\.role !== "admin"/);
+  assert.match(adminApp, /isManagementRole\(response\.user\.role\)/);
+  assert.match(adminApp, /const teacherNavItems/);
+  assert.match(adminApp, /session\.user\.role === "teacher" \? teacherNavItems : adminNavItems/);
+  assert.match(adminApp, /view === "classes" && <ClassesPage/);
+  assert.match(adminApp, /session\.user\.role === "admin" && view === "console"/);
+  assert.match(adminApp, /<option value="teacher">Giáo viên<\/option>/);
+  assert.match(classesPage, /data-testid="teacher-class-create"/);
+  assert.match(classesPage, /active_member_count/);
+  assert.match(classesPage, /updateClassMember\(item\.id, member\.id, status\)/);
+  assert.match(classesPage, /skill_type: skillType/);
+  assert.match(classesPage, /updateClassAssignment\(selectedAssignment\.id, input\)/);
+  assert.match(classesPage, /Gia hạn hoặc bỏ hạn nộp/);
+  assert.match(classesPage, /data-testid="assignment-submissions"/);
+  assert.match(classesPage, /chỉ xem nội dung phân tích được học viên chủ động nộp/);
   assert.match(api, /\/api\/v1\/admin\/stats/);
   assert.match(api, /\/api\/v1\/admin\/learning-paths/);
+  assert.match(api, /\/api\/v1\/classes\/managed/);
+  assert.match(api, /\/api\/v1\/assignments\/\$\{assignmentId\}\/submissions/);
   assert.match(api, /Authorization/);
   assert.match(api, /consoleRequest/);
   assert.match(apiConsole, /JWT admin tự động/);

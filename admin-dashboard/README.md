@@ -1,11 +1,13 @@
 # LearnMate Admin
 
-Web quản trị dành cho đội vận hành LearnMate AI. Ứng dụng dùng API backend thật,
-không chứa dữ liệu dashboard giả lập.
+Web quản lý dành cho giáo viên và đội vận hành LearnMate AI. Ứng dụng dùng API
+backend thật, không chứa dữ liệu dashboard giả lập.
 
 ## Chức năng
 
-- Đăng nhập bằng JWT và chặn tài khoản không có role `admin`.
+- Đăng nhập bằng JWT cho role `teacher` hoặc `admin`; learner không được vào cổng quản lý.
+- Giáo viên tạo lớp, chia sẻ mã tham gia, duyệt học viên, giao–gia hạn–đóng/mở bài và xem bài đã nộp trong lớp của mình.
+- Quản trị viên xem và kiểm duyệt toàn bộ lớp, đồng thời có các màn hình vận hành hệ thống.
 - Tổng quan người dùng, bài phân tích, lộ trình học và xu hướng 7 ngày.
 - Tìm kiếm, phân trang, đổi vai trò và khóa/mở tài khoản.
 - Xem chi tiết, lọc và xóa bài phân tích.
@@ -45,6 +47,9 @@ Tạo tài khoản quản trị từ thư mục `backend`:
 $env:ADMIN_PASSWORD="mot-mat-khau-manh"
 python -m app.cli create-admin --email admin@example.com --display-name "System Admin"
 ```
+
+Public registration chỉ tạo learner. Sau khi đăng nhập, quản trị viên có thể
+nâng một tài khoản đã đăng ký thành `teacher` từ màn hình người dùng.
 
 ## Kiểm tra
 

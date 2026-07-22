@@ -10,25 +10,43 @@ import {
   ApiError,
   AuditLog,
   SessionUser,
+  UserRole,
+  isManagementRole,
   normalizeBaseUrl,
 } from "./lib/api";
 import { ApiConsole } from "./api-console";
+import { ClassesPage } from "./classes-page";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "analyses" | "paths" | "audit" | "console";
+type View = "overview" | "classes" | "users" | "analyses" | "paths" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
 const PAGE_SIZE = 20;
 
-const navItems: Array<{ id: View; label: string; short: string }> = [
+type NavItem = { id: View; label: string; short: string };
+
+const adminNavItems: NavItem[] = [
   { id: "overview", label: "Tổng quan", short: "01" },
-  { id: "users", label: "Người dùng", short: "02" },
-  { id: "analyses", label: "Bài phân tích", short: "03" },
-  { id: "paths", label: "Lộ trình học", short: "04" },
-  { id: "audit", label: "Nhật ký quản trị", short: "05" },
-  { id: "console", label: "API Console", short: "06" },
+  { id: "classes", label: "Lớp học", short: "02" },
+  { id: "users", label: "Người dùng", short: "03" },
+  { id: "analyses", label: "Bài phân tích", short: "04" },
+  { id: "paths", label: "Lộ trình học", short: "05" },
+  { id: "audit", label: "Nhật ký quản trị", short: "06" },
+  { id: "console", label: "API Console", short: "07" },
 ];
+
+const teacherNavItems: NavItem[] = [
+  { id: "classes", label: "Lớp học của tôi", short: "01" },
+];
+
+function roleLabel(role: UserRole) {
+  return {
+    learner: "Học viên",
+    teacher: "Giáo viên",
+    admin: "Quản trị viên",
+  }[role];
+}
 
 function formatDate(value: string | null, withTime = true) {
   if (!value) return "Chưa có";
@@ -44,7 +62,7 @@ function formatDate(value: string | null, withTime = true) {
 
 function readableError(error: unknown) {
   if (error instanceof ApiError && error.status === 403) {
-    return "Tài khoản hiện tại không có quyền quản trị.";
+    return "Tài khoản hiện tại không có quyền truy cập chức năng quản lý này.";
   }
   return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định.";
 }
@@ -72,7 +90,9 @@ export function AdminApp({ defaultApiBaseUrl }: { defaultApiBaseUrl: string }) {
     restoreSession
       .then((user) => {
         if (!user || !token) return;
-        if (user.role !== "admin") throw new Error("Tài khoản không có quyền quản trị.");
+        if (!isManagementRole(user.role)) {
+          throw new Error("Tài khoản không có quyền vào cổng quản lý.");
+        }
         setSession({ token, user, baseUrl: normalizeBaseUrl(savedApi) });
       })
       .catch(() => {
@@ -128,8 +148,8 @@ function LoginScreen({
       const normalized = normalizeBaseUrl(baseUrl);
       const api = new AdminApi(normalized);
       const response = await api.login(email.trim(), password);
-      if (response.user.role !== "admin") {
-        throw new Error("Tài khoản đăng nhập là học viên, không phải quản trị viên.");
+      if (!isManagementRole(response.user.role)) {
+        throw new Error("Tài khoản học viên không được truy cập cổng quản lý.");
       }
       onLogin({
         token: response.access_token,
@@ -145,12 +165,12 @@ function LoginScreen({
 
   return (
     <main className="login-shell">
-      <section className="login-story" aria-label="Giới thiệu LearnMate Admin">
+      <section className="login-story" aria-label="Giới thiệu cổng quản lý LearnMate">
         <div className="brand brand-on-dark">
           <span className="brand-mark">LM</span>
           <span>
             <strong>LearnMate</strong>
-            <small>Control room</small>
+            <small>Management hub</small>
           </span>
         </div>
         <div className="story-copy">
@@ -162,7 +182,7 @@ function LoginScreen({
           </p>
         </div>
         <div className="story-metrics" aria-label="Khả năng của dashboard">
-          <div><strong>RBAC</strong><span>Phân quyền tại API</span></div>
+          <div><strong>RBAC</strong><span>Admin & giáo viên</span></div>
           <div><strong>Audit</strong><span>Theo vết thao tác</span></div>
           <div><strong>Live</strong><span>Số liệu trực tiếp</span></div>
         </div>
@@ -172,16 +192,16 @@ function LoginScreen({
         <form className="login-card" onSubmit={submit}>
           <div className="mobile-brand brand">
             <span className="brand-mark">LM</span>
-            <span><strong>LearnMate</strong><small>Control room</small></span>
+            <span><strong>LearnMate</strong><small>Management hub</small></span>
           </div>
           <div>
-            <p className="eyebrow blue">Khu vực quản trị</p>
+            <p className="eyebrow blue">Cổng quản lý</p>
             <h2>Đăng nhập hệ thống</h2>
-            <p className="muted">Chỉ tài khoản có role admin mới được truy cập.</p>
+            <p className="muted">Dành cho tài khoản giáo viên và quản trị viên.</p>
           </div>
 
           <label className="field">
-            <span>Email quản trị</span>
+            <span>Email giáo viên hoặc quản trị</span>
             <input
               type="email"
               value={email}
@@ -230,12 +250,12 @@ function LoginScreen({
             <div className="inline-alert">Đang kiểm tra phiên đăng nhập trước…</div>
           )}
 
-          <button className="primary-button" type="submit" disabled={busy}>
+          <button className="primary-button" type="submit" disabled={busy || restoring}>
             {busy ? "Đang xác thực…" : "Vào dashboard"}
           </button>
           <p className="login-footnote">
-            Tài khoản quản trị được cấp bằng CLI backend; đăng ký công khai luôn tạo
-            tài khoản học viên.
+            Đăng ký công khai luôn tạo học viên; quản trị viên cấp quyền giáo viên
+            trong màn hình người dùng.
           </p>
         </form>
       </section>
@@ -244,7 +264,9 @@ function LoginScreen({
 }
 
 function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>(
+    session.user.role === "teacher" ? "classes" : "overview",
+  );
   const [healthy, setHealthy] = useState<boolean | null>(null);
   const api = useMemo(
     () => new AdminApi(session.baseUrl, session.token),
@@ -266,6 +288,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
     };
   }, [api]);
 
+  const navItems = session.user.role === "teacher" ? teacherNavItems : adminNavItems;
   const title = navItems.find((item) => item.id === view)?.label ?? "Dashboard";
 
   return (
@@ -273,7 +296,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
       <aside className="sidebar">
         <div className="brand brand-on-dark sidebar-brand">
           <span className="brand-mark">LM</span>
-          <span><strong>LearnMate</strong><small>Control room</small></span>
+          <span><strong>LearnMate</strong><small>Management hub</small></span>
         </div>
         <nav className="side-nav" aria-label="Điều hướng quản trị">
           {navItems.map((item) => (
@@ -297,12 +320,12 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
       <div className="main-column">
         <header className="topbar">
           <div>
-            <p className="breadcrumb">LearnMate / Quản trị</p>
+            <p className="breadcrumb">LearnMate / {roleLabel(session.user.role)}</p>
             <h1>{title}</h1>
           </div>
           <div className="account-menu">
             <span className="avatar">{initials(session.user.display_name)}</span>
-            <span className="account-copy"><strong>{session.user.display_name}</strong><small>{session.user.email}</small></span>
+            <span className="account-copy"><strong>{session.user.display_name}</strong><small>{roleLabel(session.user.role)} · {session.user.email}</small></span>
             <button type="button" className="ghost-button" onClick={onLogout}>Đăng xuất</button>
           </div>
         </header>
@@ -319,12 +342,13 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
         </nav>
 
         <main className="content-area">
-          {view === "overview" && <OverviewPage api={api} onNavigate={setView} />}
-          {view === "users" && <UsersPage api={api} currentUser={session.user} />}
-          {view === "analyses" && <AnalysesPage api={api} />}
-          {view === "paths" && <LearningPathsPage api={api} />}
-          {view === "audit" && <AuditPage api={api} />}
-          {view === "console" && <ApiConsole api={api} baseUrl={session.baseUrl} />}
+          {view === "classes" && <ClassesPage api={api} currentUser={session.user} />}
+          {session.user.role === "admin" && view === "overview" && <OverviewPage api={api} onNavigate={setView} />}
+          {session.user.role === "admin" && view === "users" && <UsersPage api={api} currentUser={session.user} />}
+          {session.user.role === "admin" && view === "analyses" && <AnalysesPage api={api} />}
+          {session.user.role === "admin" && view === "paths" && <LearningPathsPage api={api} />}
+          {session.user.role === "admin" && view === "audit" && <AuditPage api={api} />}
+          {session.user.role === "admin" && view === "console" && <ApiConsole api={api} baseUrl={session.baseUrl} />}
         </main>
       </div>
     </div>
@@ -359,6 +383,25 @@ function OverviewPage({ api, onNavigate }: { api: AdminApi; onNavigate: (view: V
     { label: "Lượt phân tích", value: stats.total_analyses, note: `${stats.analyses_today} lượt hôm nay`, tone: "purple" },
     { label: "Lộ trình học", value: stats.total_learning_paths, note: `${stats.learning_paths_today} lộ trình hôm nay`, tone: "amber" },
   ];
+  if (
+    typeof stats.teacher_users === "number" &&
+    typeof stats.total_classes === "number"
+  ) {
+    cards.push(
+      {
+        label: "Giáo viên",
+        value: stats.teacher_users,
+        note: "tài khoản phụ trách lớp",
+        tone: "blue",
+      },
+      {
+        label: "Lớp học",
+        value: stats.total_classes,
+        note: `${stats.active_classes ?? 0} lớp đang hoạt động`,
+        tone: "green",
+      },
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -440,7 +483,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
     setReload((value) => value + 1);
   }
 
-  async function updateUser(user: AdminUser, update: { is_active?: boolean; role?: string }, message: string) {
+  async function updateUser(user: AdminUser, update: { is_active?: boolean; role?: UserRole }, message: string) {
     if (!window.confirm(message)) return;
     setBusyId(user.id);
     setNotice(null);
@@ -463,7 +506,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
       <section className="section-heading"><div><p className="eyebrow blue">Identity & access</p><h2>Quản lý người dùng</h2><p className="muted">Tìm kiếm, phân quyền và khóa tài khoản ngay tại API.</p></div><span className="count-badge">{data?.total ?? 0} tài khoản</span></section>
       <form className="filter-bar" onSubmit={search}>
         <label className="search-field"><span className="sr-only">Tìm người dùng</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên hoặc email…" /></label>
-        <select aria-label="Lọc vai trò" value={role} onChange={(event) => { setRole(event.target.value); setPage(0); }}><option value="">Mọi vai trò</option><option value="learner">Học viên</option><option value="admin">Quản trị viên</option></select>
+        <select aria-label="Lọc vai trò" value={role} onChange={(event) => { setRole(event.target.value); setPage(0); }}><option value="">Mọi vai trò</option><option value="learner">Học viên</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị viên</option></select>
         <select aria-label="Lọc trạng thái" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Đã khóa</option></select>
         <button className="secondary-button" type="submit">Tìm kiếm</button>
       </form>
@@ -476,7 +519,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
             {data.items.map((user) => (
               <div className="table-row" role="row" key={user.id}>
                 <div className="user-cell"><span className="mini-avatar">{initials(user.display_name)}</span><span><strong>{user.display_name}</strong><small>{user.email}</small></span></div>
-                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => void updateUser(user, { role: event.target.value }, `Đổi vai trò ${user.email} thành ${event.target.value}?`)}><option value="learner">Học viên</option><option value="admin">Admin</option></select></div>
+                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => { const nextRole = event.target.value as UserRole; void updateUser(user, { role: nextRole }, `Đổi vai trò ${user.email} thành ${roleLabel(nextRole)}?`); }}><option value="learner">Học viên</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị viên</option></select></div>
                 <div><strong>{user.analysis_count}</strong><small className="cell-note"> bài phân tích</small></div>
                 <div className="date-cell">{formatDate(user.last_login_at)}</div>
                 <div><span className={`status-pill ${user.is_active ? "active" : "locked"}`}>{user.is_active ? "Hoạt động" : "Đã khóa"}</span></div>
