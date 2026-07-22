@@ -2,6 +2,25 @@
 
 All notable changes to LearnMate AI are recorded here.
 
+## Unreleased
+
+### Added
+
+- Teacher accounts with server-enforced, class-scoped ownership.
+- Multi-class learner membership through rotatable join codes and teacher approval.
+- Reading, writing and speaking assignments linked to learner-owned AI analyses through explicit submissions.
+- Learner classroom UI and a role-aware teacher/administrator management console.
+- Assignment deadline editing and published/closed lifecycle controls in the management console.
+
+### Security
+
+- Teachers can access only their own classes and analyses explicitly submitted to those classes.
+- Public registration remains learner-only; teacher promotion stays under administrator control.
+- Submitted analyses are protected from deletion while referenced as class work.
+- Active classes protect teacher ownership during role/account moderation, and administrator classroom mutations are audited.
+- Transactional row locks preserve join/leave consent, assignment deadlines and active-teacher ownership during concurrent requests.
+- SQLite development and test connections now enforce the same declared foreign-key actions used by PostgreSQL.
+
 ## 0.7.0 - 2026-07-22
 
 ### Added

@@ -1,6 +1,6 @@
 # LearnMate AI
 
-LearnMate AI is a graduation-project MVP for formative English learning. It combines a Flutter mobile application, an administrator web console, on-device OCR, speech-to-text, a FastAPI backend, PostgreSQL/SQLite and a replaceable AI provider.
+LearnMate AI is a graduation-project MVP for formative English learning. It combines a Flutter learner application, a teacher/administrator web console, on-device OCR, speech-to-text, a FastAPI backend, PostgreSQL/SQLite and a replaceable AI provider.
 
 > AI feedback and scores are formative. The application does not claim to provide an official IELTS score or infer pronunciation quality from a transcript.
 
@@ -9,6 +9,8 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 - Email/password registration and JWT login.
 - Secure token storage on the device.
 - Administrator RBAC, account moderation and immutable audit logs.
+- Teacher RBAC with owned classrooms, rotatable join codes and learner approval.
+- Classroom assignments and learner submissions linked to existing AI analyses.
 - Responsive web dashboard with live metrics, user/content management and an authenticated API Console.
 - Reading analysis with translation, vocabulary and questions.
 - Writing feedback with issues, score and rewrite.
@@ -26,10 +28,10 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 ## Architecture
 
 ```text
-Flutter mobile                              Admin web
-  ├─ secure auth token                        ├─ operations dashboard
-  ├─ camera -> OCR -> editable text           └─ authenticated API Console
-  └─ microphone -> STT transcript                       |
+Flutter learner app                        Teacher/admin web
+  ├─ secure auth token                        ├─ classroom management
+  ├─ camera -> OCR -> editable text           ├─ operations dashboard
+  └─ microphone -> STT transcript             └─ authenticated API Console
                  |                                      |
                  +----------> FastAPI REST API <---------+
                                    |
@@ -80,7 +82,7 @@ Camera OCR is mobile-only. For an Android emulator the default API URL is `http:
 
 The learning-path screen creates a measurable seven-day plan from the learner's goal, current CEFR level, available minutes and up to 20 recent analyses. Mock mode is deterministic for local testing; Gemini can generate the same validated structure when enabled.
 
-Administrator dashboard:
+Teacher and administrator dashboard:
 
 ```powershell
 cd admin-dashboard
@@ -88,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
+Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only. An administrator can then promote a registered account to `teacher`; teacher self-registration is not supported.
 
 ## Quick start with Docker
 
@@ -99,9 +101,10 @@ docker compose up --build
 This starts PostgreSQL, the API on <http://localhost:8000> and LearnMate Admin on <http://localhost:3000>. API documentation is at <http://localhost:8000/docs>.
 
 For desktop API testing, import the versioned [Postman collection](postman/README.md).
-It covers health, authentication, analyses, personalized learning paths and
-administrator endpoints without storing passwords or JWTs in Git. The admin
-dashboard also includes an authenticated API Console for the same backend.
+It covers health, authentication, analyses, personalized learning paths,
+classrooms and administrator endpoints without storing passwords or JWTs in
+Git. The management dashboard also includes an authenticated API Console for
+the same backend.
 
 Create the first Docker administrator:
 

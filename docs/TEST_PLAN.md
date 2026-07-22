@@ -14,6 +14,11 @@
 - Administrator authorization, statistics, user search and account lockout protections.
 - Cross-user analysis moderation and administrator audit logging.
 - Cross-user learning-path moderation and administrator audit logging.
+- Teacher role promotion, teacher-only class creation and cross-teacher ownership isolation.
+- Join-code rotation, pending membership approval, duplicate join conflicts, consent-preserving leave/rejoin and inactive classes.
+- Assignment visibility, deadline/status updates, matching-analysis submission, multiple attempts and cross-class/private-analysis isolation.
+- Active-class teacher role/deactivation guards and administrator audit entries for class, roster and assignment mutations.
+- Clean Alembic migration through classroom revision `0004` on SQLite and PostgreSQL-compatible schema operations.
 - Whitespace/input validation.
 - Alembic upgrade from an empty database.
 - Production Docker image build.
@@ -24,6 +29,8 @@
 - Production vinext/Cloudflare Worker build and server-rendered login verification.
 - API Console preset, custom-header validation, response-size and safe cURL tests.
 - Learning-path dashboard and API Console presets.
+- Teacher session gating, role-scoped navigation and classroom API contracts.
+- Classroom creation, roster approval, assignment creation/lifecycle controls and submitted-analysis rendering states.
 - Production Node dependency audit at high severity.
 - Admin web Docker image build.
 
@@ -41,6 +48,7 @@
 - API login payload and missing auth-header check.
 - Bearer token propagation.
 - Learning-path request payload and seven-day UI rendering.
+- Classroom join, pending/active states, assignment lists and matching-analysis submission.
 - OCR and speech-service adapters feeding editable study text through fakes.
 - API validation-error parsing.
 - Auth controller token persistence.
@@ -57,6 +65,8 @@ Test on at least one physical Android device:
 5. Generate a seven-day path after at least three analyses and verify its focus reflects recent activity.
 6. Disable network during API calls and verify a readable error.
 7. Delete a history item and verify it cannot be accessed again.
+8. Join a classroom, verify pending approval, receive approval and open its assignments.
+9. Submit a matching analysis to an assignment and verify the teacher can see it but cannot see unrelated history.
 
 Record OCR accuracy, API latency, malformed AI responses, useful-feedback rate and cost across at least 20 representative samples.
 

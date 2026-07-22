@@ -9,8 +9,11 @@ Do not report real API keys, passwords, access tokens or learner content in a pu
 - Disable development authentication.
 - Use a random JWT secret of at least 32 characters.
 - Restrict CORS origins.
-- Grant administrator roles only through the backend CLI or a controlled database process.
-- Keep admin JWTs tab-scoped; do not paste live tokens into issues or saved API collections.
+- Grant the first administrator role only through the backend CLI. Grant later administrator or teacher roles only through a controlled administrator flow.
+- Treat class join codes as rotatable invitations, rate-limit join attempts at the gateway before public launch, and never derive learner or teacher ownership from client-provided IDs.
+- Do not expose a learner's private analysis history to a teacher; only assignment submissions are class-visible.
+- Pause a teacher's active classes before disabling or changing that account's role; administrator classroom changes are recorded in the audit log.
+- Keep teacher/admin web JWTs tab-scoped; do not paste live tokens into issues or saved API collections.
 - Use managed PostgreSQL backups.
 - Add gateway rate limits and cost alerts for AI requests.
 - Define retention/deletion rules for learner text and future audio.

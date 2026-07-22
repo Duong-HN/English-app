@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a992e7e0-6e6c-4ba8-a21f-07a8892f7001",
     "name": "LearnMate AI API",
-    "description": "Safe local workspace for learner, learning-path and administration APIs. Login requests save JWTs only to the selected local Postman environment.",
+    "description": "Safe local workspace for learner, classroom, learning-path and administration APIs. Login requests save JWTs only to the selected local Postman environment.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -179,7 +179,20 @@
               }
             },
             "url": "{{baseUrl}}/api/v1/analyses/writing"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Writing analysis succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.environment.set('analysisId', body.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Chấm nội dung transcript",
@@ -270,6 +283,466 @@
             "header": [],
             "url": "{{baseUrl}}/api/v1/learning-paths?limit=20&offset=0"
           }
+        }
+      ]
+    },
+    {
+      "name": "Classrooms",
+      "item": [
+        {
+          "name": "Đăng nhập giáo viên",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{teacherEmail}}\",\n  \"password\": \"{{teacherPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher login succeeds', function () { pm.response.to.have.status(200); });",
+                  "['teacherToken', 'classId', 'joinCode', 'membershipId', 'assignmentId', 'analysisId'].forEach(function (key) { pm.environment.unset(key); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.user.role).to.eql('teacher');",
+                  "if (body.access_token) pm.environment.set('teacherToken', body.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo lớp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"English Communication B1\",\n  \"description\": \"Lớp luyện giao tiếp và viết\",\n  \"target_level\": \"B1\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/classes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Class is created', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.environment.set('classId', body.id);",
+                  "if (body.join_code) pm.environment.set('joinCode', body.join_code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lớp giáo viên quản lý",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/managed?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Chi tiết lớp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Class detail is available to its teacher', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().id).to.eql(pm.environment.get('classId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cập nhật lớp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Lớp luyện giao tiếp, viết và phản hồi theo bài tập\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Class update succeeds', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().description).to.include('phản hồi');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đổi mã tham gia lớp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/join-code/rotate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Join code rotation succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.join_code).to.be.a('string').and.not.empty;",
+                  "pm.environment.set('joinCode', body.join_code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Học viên xin tham gia lớp",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"join_code\": \"{{joinCode}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/classes/join"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner join request is created', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.membership_status).to.eql('pending');",
+                  "pm.expect(body.id).to.eql(pm.environment.get('classId'));",
+                  "pm.environment.set('membershipId', body.membership_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lớp của học viên",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/mine?limit=20&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner class list succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.items.some(function (item) { return item.id === pm.environment.get('classId') && item.membership_status === 'pending'; })).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách thành viên",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/members?limit=20&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher member list succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const pending = body.items && body.items.find(function (item) { return item.status === 'pending'; });",
+                  "pm.expect(pending && pending.id).to.eql(pm.environment.get('membershipId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duyệt thành viên",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/members/{{membershipId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher approves the learner', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().status).to.eql('active');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo bài tập",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Write about your workday\",\n  \"instructions\": \"Write 100-150 English words about a typical workday.\",\n  \"skill_type\": \"writing\",\n  \"target_level\": \"B1\",\n  \"status\": \"published\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/assignments"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Assignment is created', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.environment.set('assignmentId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bài tập trong lớp",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/assignments?limit=20&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner assignment list succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.items.some(function (item) { return item.id === pm.environment.get('assignmentId'); })).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chi tiết bài tập",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/assignments/{{assignmentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner assignment detail succeeds', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().id).to.eql(pm.environment.get('assignmentId'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo bài viết để nộp",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input_text\": \"I usually start work at eight o'clock. I review my tasks, answer emails, and discuss priorities with my team before focusing on the most important project.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/analyses/writing"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner writing analysis succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.type).to.eql('writing');",
+                  "pm.environment.set('analysisId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nộp bài phân tích",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analysis_id\": \"{{analysisId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/assignments/{{assignmentId}}/submissions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner submission is created', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.analysis_id).to.eql(pm.environment.get('analysisId'));",
+                  "pm.expect(body.assignment_id).to.eql(pm.environment.get('assignmentId'));",
+                  "pm.expect(body.attempt_number).to.be.at.least(1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bài học viên đã nộp",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/assignments/{{assignmentId}}/submissions?limit=20&offset=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher submission list succeeds', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.items.some(function (item) { return item.analysis_id === pm.environment.get('analysisId'); })).to.eql(true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đóng bài tập",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{teacherToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/assignments/{{assignmentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher closes the assignment', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().status).to.eql('closed');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Học viên rời lớp",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/classes/{{classId}}/membership"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Learner leaves the class', function () { pm.response.to.have.status(200); });",
+                  "pm.expect(pm.response.json().message).to.eql('Class membership removed');"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -421,6 +894,11 @@
     },
     {
       "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherToken",
       "value": "",
       "type": "string"
     }
