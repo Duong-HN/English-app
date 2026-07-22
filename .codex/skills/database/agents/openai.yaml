@@ -1,0 +1,4 @@
+interface:
+  display_name: "Database and Migrations"
+  short_description: "Evolve SQLAlchemy data and Alembic migrations"
+  default_prompt: "Use $database to implement this LearnMate persistence change safely."

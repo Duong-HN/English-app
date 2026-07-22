@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Integration"
+  short_description: "Extend structured Mock and Gemini workflows"
+  default_prompt: "Use $ai-integration to implement this structured LearnMate AI capability."

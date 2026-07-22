@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Injection"
+  short_description: "Use existing FastAPI and constructor seams"
+  default_prompt: "Use $dependency-injection to add a testable LearnMate dependency without a new container."

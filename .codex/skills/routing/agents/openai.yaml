@@ -1,0 +1,4 @@
+interface:
+  display_name: "Routing and Navigation"
+  short_description: "Extend API routes and client navigation safely"
+  default_prompt: "Use $routing to add or change LearnMate routes and navigation."

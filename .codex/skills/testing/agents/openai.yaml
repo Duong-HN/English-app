@@ -1,0 +1,4 @@
+interface:
+  display_name: "Testing"
+  short_description: "Add focused tests across all LearnMate apps"
+  default_prompt: "Use $testing to design and implement coverage for this LearnMate change."

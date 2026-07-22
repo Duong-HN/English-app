@@ -1,0 +1,4 @@
+interface:
+  display_name: "Performance Optimization"
+  short_description: "Measure and improve LearnMate bottlenecks"
+  default_prompt: "Use $performance-optimization to diagnose and optimize this LearnMate performance issue."

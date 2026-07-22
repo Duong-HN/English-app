@@ -1,0 +1,4 @@
+interface:
+  display_name: "Theme System"
+  short_description: "Maintain LearnMate visual tokens and styling"
+  default_prompt: "Use $theme-system to change LearnMate colors, typography, or reusable styling."

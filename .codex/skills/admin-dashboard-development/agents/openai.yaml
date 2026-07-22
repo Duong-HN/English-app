@@ -1,0 +1,4 @@
+interface:
+  display_name: "Admin Dashboard Development"
+  short_description: "Build the Vinext administrator dashboard"
+  default_prompt: "Use $admin-dashboard-development to implement this LearnMate admin dashboard change."

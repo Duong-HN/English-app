@@ -1,0 +1,4 @@
+interface:
+  display_name: "State Management"
+  short_description: "Manage Flutter and React state consistently"
+  default_prompt: "Use $state-management to design the state flow for this LearnMate feature."

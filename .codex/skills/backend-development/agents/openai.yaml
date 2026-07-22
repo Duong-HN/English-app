@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backend Development"
+  short_description: "Build the LearnMate FastAPI backend safely"
+  default_prompt: "Use $backend-development to implement this LearnMate backend change."

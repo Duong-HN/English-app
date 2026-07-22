@@ -1,0 +1,4 @@
+interface:
+  display_name: "CI CD and Release"
+  short_description: "Maintain checks, containers, tags, and deploys"
+  default_prompt: "Use $ci-cd-release to change LearnMate build, release, or deployment automation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Authentication and Authorization"
+  short_description: "Protect learner and administrator identity flows"
+  default_prompt: "Use $authentication to change LearnMate identity or authorization behavior safely."

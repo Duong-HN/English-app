@@ -1,0 +1,4 @@
+interface:
+  display_name: "Localization Conventions"
+  short_description: "Maintain Vietnamese-first product language"
+  default_prompt: "Use $localization to change LearnMate copy or locale behavior consistently."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "UI Development"
+  short_description: "Create consistent mobile and admin interfaces"
+  default_prompt: "Use $ui-development to build this LearnMate user interface."

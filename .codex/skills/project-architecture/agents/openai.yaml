@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Architecture"
+  short_description: "Plan changes in the real LearnMate monorepo"
+  default_prompt: "Use $project-architecture to plan this LearnMate change across the correct applications."

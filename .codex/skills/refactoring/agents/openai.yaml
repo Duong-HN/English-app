@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactoring"
+  short_description: "Restructure LearnMate code without behavior drift"
+  default_prompt: "Use $refactoring to safely restructure this LearnMate code."

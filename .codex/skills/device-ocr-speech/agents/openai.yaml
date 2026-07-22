@@ -1,0 +1,4 @@
+interface:
+  display_name: "Device OCR and Speech"
+  short_description: "Maintain mobile camera OCR and speech input"
+  default_prompt: "Use $device-ocr-speech to implement this LearnMate camera or speech feature."

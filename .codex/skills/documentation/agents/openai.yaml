@@ -1,0 +1,4 @@
+interface:
+  display_name: "Documentation"
+  short_description: "Keep LearnMate docs aligned with actual behavior"
+  default_prompt: "Use $documentation to update LearnMate documentation for this change."

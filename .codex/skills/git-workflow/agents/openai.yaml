@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Workflow"
+  short_description: "Use project branches, commits, and release tags"
+  default_prompt: "Use $git-workflow to prepare this LearnMate change for review or release."

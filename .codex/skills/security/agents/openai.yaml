@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security and Privacy"
+  short_description: "Protect secrets, learner data, and admin actions"
+  default_prompt: "Use $security to review or implement this LearnMate security-sensitive change."
