@@ -249,6 +249,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .status-pill { padding: 6px 9px; }
 .status-pill.active { background: var(--green-soft); color: #087553; }
 .status-pill.locked { background: var(--red-soft); color: #b42318; }
+.status-pill.pending { background: var(--amber-soft); color: #a15c00; }
 .row-button { min-height: 31px; padding: 0 10px; border: 1px solid #d8dee8; background: white; color: #475467; font-size: 10px; }
 .pagination { min-width: 280px; display: flex; align-items: center; justify-content: center; gap: 17px; padding: 15px; border-top: 1px solid #eef0f4; color: #667085; font-size: 11px; }
 .pagination button { min-height: 32px; padding: 0 11px; border: 1px solid #d8dee8; border-radius: 8px; background: white; color: #344054; font-size: 10px; font-weight: 700; }
@@ -356,6 +357,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .submission-card summary { padding: 11px 13px; color: var(--blue); font-size: 10px; font-weight: 800; cursor: pointer; }
 .submission-card pre { max-height: 260px; overflow: auto; margin: 0; padding: 13px; border-top: 1px solid #e2e7ef; background: #101828; color: #d7e2f3; font-size: 10px; white-space: pre-wrap; }
 .submission-card .secondary-button { justify-self: end; }
+.application-list { display: grid; gap: 14px; }
+.application-card { display: grid; gap: 16px; }
+.application-card > .detail-section { margin: 0; }
+.application-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.application-meta span { display: grid; gap: 4px; padding: 12px; border-radius: 10px; background: #f8fafc; }
+.application-meta small { color: var(--muted); font-size: 10px; }
+.application-meta strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.application-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .console-heading-actions { display: flex; align-items: center; gap: 10px; }
 .auth-chip { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 99px; background: var(--green-soft); color: #087553; font-size: 10px; font-weight: 800; }
@@ -465,6 +474,7 @@ kbd { padding: 2px 5px; border: 1px solid #d8dee8; border-bottom-width: 2px; bor
   .filter-bar, .filter-bar:has(select:nth-of-type(1):last-of-type) { grid-template-columns: 1fr; }
   .analysis-grid { grid-template-columns: 1fr; }
   .detail-facts { grid-template-columns: 1fr 1fr; }
+  .application-meta { grid-template-columns: 1fr; }
   .dialog-backdrop { padding: 10px; }
   .detail-dialog { max-height: 94vh; }
   .console-heading-actions { width: 100%; justify-content: space-between; }

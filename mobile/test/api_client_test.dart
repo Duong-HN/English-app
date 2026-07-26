@@ -142,6 +142,48 @@ void main() {
     expect(response['status'], 'needs_daily_time');
   });
 
+  test(
+    'teacher application endpoints use the learner review contract',
+    () async {
+      final requests = <http.Request>[];
+      final client = ApiClient(
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.method == 'GET') {
+            return jsonResponse({'application': null});
+          }
+          return jsonResponse({
+            'id': 'application-1',
+            'user_id': 'learner-1',
+            'motivation': 'I have taught English for several years.',
+            'organization': 'Community Center',
+            'status': 'pending',
+            'review_note': null,
+            'requested_at': '2026-07-22T00:00:00Z',
+            'reviewed_at': null,
+          }, 201);
+        }),
+      )..accessToken = 'learner-token';
+
+      final current = await client.teacherApplication();
+      final submitted = await client.submitTeacherApplication(
+        motivation: 'I have taught English for several years.',
+        organization: 'Community Center',
+      );
+
+      expect(current['application'], isNull);
+      expect(requests[0].url.path, '/api/v1/teacher-applications/me');
+      expect(requests[1].url.path, '/api/v1/teacher-applications');
+      expect(requests[1].headers['Authorization'], 'Bearer learner-token');
+      expect(jsonDecode(requests[1].body), {
+        'motivation': 'I have taught English for several years.',
+        'organization': 'Community Center',
+      });
+      expect(submitted['status'], 'pending');
+    },
+  );
+
   test('class APIs accept bare lists and submit learner text', () async {
     final requests = <http.Request>[];
     final client = ApiClient(

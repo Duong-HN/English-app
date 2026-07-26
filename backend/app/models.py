@@ -45,6 +45,16 @@ class User(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    teacher_application: Mapped[TeacherApplication | None] = relationship(
+        back_populates="applicant",
+        cascade="all, delete-orphan",
+        foreign_keys="TeacherApplication.user_id",
+        uselist=False,
+    )
+    reviewed_teacher_applications: Mapped[list[TeacherApplication]] = relationship(
+        back_populates="reviewer",
+        foreign_keys="TeacherApplication.reviewed_by_id",
+    )
     owned_classes: Mapped[list[Classroom]] = relationship(
         back_populates="teacher",
         cascade="all, delete-orphan",
@@ -142,6 +152,34 @@ class LearnerProfile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user: Mapped[User] = relationship(back_populates="learner_profile")
+
+
+class TeacherApplication(Base):
+    __tablename__ = "teacher_applications"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_teacher_application_user"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    motivation: Mapped[str] = mapped_column(Text)
+    organization: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    applicant: Mapped[User] = relationship(
+        back_populates="teacher_application",
+        foreign_keys=[user_id],
+    )
+    reviewer: Mapped[User | None] = relationship(
+        back_populates="reviewed_teacher_applications",
+        foreign_keys=[reviewed_by_id],
+    )
 
 
 class Classroom(Base):

@@ -12,6 +12,7 @@ import {
   AuditLog,
   ClassMember,
   SessionUser,
+  TeacherApplication,
   TeacherAssignment,
   TeacherClass,
   normalizeBaseUrl,
@@ -19,7 +20,7 @@ import {
 import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "analyses" | "paths" | "audit" | "console";
+type View = "overview" | "users" | "teacher-applications" | "analyses" | "paths" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
@@ -28,10 +29,11 @@ const PAGE_SIZE = 20;
 const navItems: Array<{ id: View; label: string; short: string }> = [
   { id: "overview", label: "Tổng quan", short: "01" },
   { id: "users", label: "Người dùng", short: "02" },
-  { id: "analyses", label: "Bài phân tích", short: "03" },
-  { id: "paths", label: "Lộ trình học", short: "04" },
-  { id: "audit", label: "Nhật ký quản trị", short: "05" },
-  { id: "console", label: "API Console", short: "06" },
+  { id: "teacher-applications", label: "Hồ sơ giáo viên", short: "03" },
+  { id: "analyses", label: "Bài phân tích", short: "04" },
+  { id: "paths", label: "Lộ trình học", short: "05" },
+  { id: "audit", label: "Nhật ký quản trị", short: "06" },
+  { id: "console", label: "API Console", short: "07" },
 ];
 
 function formatDate(value: string | null, withTime = true) {
@@ -248,8 +250,8 @@ function LoginScreen({
             {busy ? "Đang xác thực…" : "Vào dashboard"}
           </button>
           <p className="login-footnote">
-            Đăng ký công khai luôn tạo tài khoản học viên. Quản trị viên có thể cấp
-            quyền giáo viên trong mục quản lý người dùng.
+            Đăng ký công khai luôn tạo tài khoản học viên. Học viên gửi hồ sơ, quản trị viên duyệt
+            tại mục Hồ sơ giáo viên.
           </p>
         </form>
       </section>
@@ -638,6 +640,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
         <main className="content-area">
           {view === "overview" && <OverviewPage api={api} onNavigate={setView} />}
           {view === "users" && <UsersPage api={api} currentUser={session.user} />}
+          {view === "teacher-applications" && <TeacherApplicationsPage api={api} />}
           {view === "analyses" && <AnalysesPage api={api} />}
           {view === "paths" && <LearningPathsPage api={api} />}
           {view === "audit" && <AuditPage api={api} />}
@@ -793,7 +796,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
             {data.items.map((user) => (
               <div className="table-row" role="row" key={user.id}>
                 <div className="user-cell"><span className="mini-avatar">{initials(user.display_name)}</span><span><strong>{user.display_name}</strong><small>{user.email}</small></span></div>
-                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => void updateUser(user, { role: event.target.value }, `Đổi vai trò ${user.email} thành ${event.target.value}?`)}><option value="learner">Học viên</option><option value="teacher">Giáo viên</option><option value="admin">Admin</option></select></div>
+                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => void updateUser(user, { role: event.target.value }, `Đổi vai trò ${user.email} thành ${event.target.value}?`)}><option value="learner">Học viên</option>{user.role === "teacher" && <option value="teacher">Giáo viên</option>}<option value="admin">Admin</option></select></div>
                 <div><strong>{user.analysis_count}</strong><small className="cell-note"> bài phân tích</small></div>
                 <div className="date-cell">{formatDate(user.last_login_at)}</div>
                 <div><span className={`status-pill ${user.is_active ? "active" : "locked"}`}>{user.is_active ? "Hoạt động" : "Đã khóa"}</span></div>
@@ -801,6 +804,80 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
               </div>
             ))}
           </div>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        </section>
+      )}
+    </div>
+  );
+}
+
+function TeacherApplicationsPage({ api }: { api: AdminApi }) {
+  const [status, setStatus] = useState("pending");
+  const [page, setPage] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [data, setData] = useState<{ items: TeacherApplication[]; total: number } | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.teacherApplications({ status, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+      .then((result) => active && setData(result))
+      .catch((reason) => active && setError(readableError(reason)));
+    return () => { active = false; };
+  }, [api, status, page, reload]);
+
+  async function review(application: TeacherApplication, decision: "approved" | "rejected") {
+    const action = decision === "approved" ? "duyệt và cấp quyền giáo viên" : "từ chối hồ sơ";
+    if (!window.confirm(`Bạn muốn ${action} của ${application.applicant_email}?`)) return;
+    setBusyId(application.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.reviewTeacherApplication(application.id, decision, reviewNotes[application.id]);
+      setNotice(decision === "approved" ? "Đã duyệt hồ sơ và cấp quyền giáo viên." : "Đã từ chối hồ sơ giáo viên.");
+      setReload((value) => value + 1);
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+  const statusLabel = status === "pending" ? "Chờ duyệt" : status === "approved" ? "Đã duyệt" : "Đã từ chối";
+
+  return (
+    <div className="page-stack">
+      <section className="section-heading">
+        <div><p className="eyebrow blue">Teacher onboarding</p><h2>Hồ sơ giáo viên</h2><p className="muted">Học viên tự gửi hồ sơ; chỉ hồ sơ được duyệt mới được cấp quyền tạo lớp và dùng Teacher Dashboard.</p></div>
+        <span className="count-badge">{data?.total ?? 0} hồ sơ</span>
+      </section>
+      <form className="filter-bar" onSubmit={(event) => event.preventDefault()}>
+        <select aria-label="Lọc hồ sơ giáo viên" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="pending">Chờ duyệt</option><option value="approved">Đã duyệt</option><option value="rejected">Đã từ chối</option></select>
+        <span className="panel-chip">{statusLabel}</span>
+      </form>
+      {notice && <div className="inline-alert success-alert" role="status">{notice}</div>}
+      {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+      {!data ? <LoadingState label="Đang tải hồ sơ giáo viên…" /> : data.items.length === 0 ? <EmptyState message={`Không có hồ sơ ${statusLabel.toLowerCase()}.`} /> : (
+        <section className="application-list">
+          {data.items.map((application) => (
+            <article className="panel application-card" key={application.id}>
+              <header className="panel-heading">
+                <div className="user-cell"><span className="mini-avatar">{initials(application.applicant_display_name)}</span><span><strong>{application.applicant_display_name}</strong><small>{application.applicant_email}</small></span></div>
+                <span className={`status-pill ${application.status === "approved" ? "active" : application.status === "rejected" ? "locked" : "pending"}`}>{application.status === "pending" ? "Chờ duyệt" : application.status === "approved" ? "Đã duyệt" : "Đã từ chối"}</span>
+              </header>
+              <div className="application-meta"><span><small>Đơn vị</small><strong>{application.organization ?? "Chưa cung cấp"}</strong></span><span><small>Gửi lúc</small><strong>{formatDate(application.requested_at)}</strong></span><span><small>Người duyệt</small><strong>{application.reviewer_email ?? "Chưa có"}</strong></span></div>
+              <div className="detail-section"><h3>Lý do đăng ký</h3><p>{application.motivation}</p></div>
+              {application.review_note && <div className="inline-alert">Ghi chú: {application.review_note}</div>}
+              {application.status === "pending" && <>
+                <label className="field"><span>Ghi chú duyệt (không bắt buộc)</span><textarea rows={3} value={reviewNotes[application.id] ?? ""} onChange={(event) => setReviewNotes((notes) => ({ ...notes, [application.id]: event.target.value }))} placeholder="Nhận xét hoặc yêu cầu bổ sung hồ sơ…" /></label>
+                <div className="application-actions"><button className="primary-button" type="button" disabled={busyId === application.id} onClick={() => void review(application, "approved")}>Duyệt và cấp quyền</button><button className="danger-button" type="button" disabled={busyId === application.id} onClick={() => void review(application, "rejected")}>Từ chối</button></div>
+              </>}
+            </article>
+          ))}
           <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </section>
       )}

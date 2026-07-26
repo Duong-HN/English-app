@@ -17,6 +17,7 @@ from .routers import (
     learning_paths,
     onboarding,
     placement,
+    teacher_applications,
     vocabulary,
 )
 
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     application.include_router(vocabulary.router, prefix="/api/v1")
     application.include_router(dictionary.router, prefix="/api/v1")
     application.include_router(onboarding.router, prefix="/api/v1")
+    application.include_router(teacher_applications.router, prefix="/api/v1")
     application.include_router(classes.router, prefix="/api/v1")
     application.include_router(home.router, prefix="/api/v1")
     application.include_router(admin.router, prefix="/api/v1")

@@ -149,6 +149,25 @@ class ApiClient {
     return _post('/api/v1/onboarding/complete', body: const {});
   }
 
+  Future<Map<String, dynamic>> teacherApplication() {
+    return _get('/api/v1/teacher-applications/me');
+  }
+
+  Future<Map<String, dynamic>> submitTeacherApplication({
+    required String motivation,
+    String? organization,
+  }) {
+    return _post(
+      '/api/v1/teacher-applications',
+      body: {
+        'motivation': motivation.trim(),
+        ...?(organization == null || organization.trim().isEmpty
+            ? null
+            : {'organization': organization.trim()}),
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> home() {
     return _get('/api/v1/home');
   }

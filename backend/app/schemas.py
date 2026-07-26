@@ -15,6 +15,7 @@ OnboardingStatus = Literal[
     "needs_learning_path",
     "completed",
 ]
+TeacherApplicationStatus = Literal["pending", "approved", "rejected"]
 
 
 class RegisterRequest(BaseModel):
@@ -46,6 +47,57 @@ class UserResponse(BaseModel):
     level: str | None
     is_active: bool
     created_at: datetime
+
+
+class TeacherApplicationCreate(BaseModel):
+    motivation: str = Field(min_length=20, max_length=2000)
+    organization: str | None = Field(default=None, max_length=160)
+
+    @field_validator("motivation")
+    @classmethod
+    def clean_motivation(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 20:
+            raise ValueError("motivation must contain at least 20 non-whitespace characters")
+        return cleaned
+
+    @field_validator("organization")
+    @classmethod
+    def clean_organization(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        return cleaned or None
+
+
+class TeacherApplicationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    motivation: str
+    organization: str | None
+    status: TeacherApplicationStatus
+    review_note: str | None
+    requested_at: datetime
+    reviewed_at: datetime | None
+
+
+class TeacherApplicationStatusResponse(BaseModel):
+    application: TeacherApplicationResponse | None
+
+
+class TeacherApplicationReview(BaseModel):
+    status: Literal["approved", "rejected"]
+    review_note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("review_note")
+    @classmethod
+    def clean_review_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class TokenResponse(BaseModel):
@@ -485,6 +537,17 @@ class AdminUserUpdate(BaseModel):
         if self.is_active is None and self.role is None:
             raise ValueError("At least one user field must be changed")
         return self
+
+
+class AdminTeacherApplicationResponse(TeacherApplicationResponse):
+    applicant_email: EmailStr
+    applicant_display_name: str
+    reviewer_email: EmailStr | None
+
+
+class AdminTeacherApplicationListResponse(BaseModel):
+    items: list[AdminTeacherApplicationResponse]
+    total: int
 
 
 class AdminAnalysisResponse(AnalysisResponse):
