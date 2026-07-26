@@ -111,3 +111,22 @@ def test_whitespace_input_is_rejected(client):
         headers=auth_header(session["access_token"]),
     )
     assert response.status_code == 422
+
+
+def test_analysis_validates_learning_context_before_calling_ai(client, monkeypatch):
+    session = register(client, "analysis-context-first@example.com")
+
+    def unexpected_provider_call(_settings):
+        raise AssertionError("AI provider must not run for an unauthorized or missing learning path")
+
+    monkeypatch.setattr("app.routers.analyses.build_provider", unexpected_provider_call)
+    response = client.post(
+        "/api/v1/analyses/writing",
+        headers=auth_header(session["access_token"]),
+        json={
+            "input_text": "This otherwise valid response references a missing task.",
+            "learning_path_id": "missing-path",
+            "task_day": 1,
+        },
+    )
+    assert response.status_code == 404

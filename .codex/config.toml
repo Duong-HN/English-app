@@ -1,0 +1,13 @@
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+enabled = true
+required = false
+
+[mcp_servers.learnmate]
+command = "D:/GraduationProject/backend/.venv/Scripts/python.exe"
+args = ["-m", "app.mcp_server"]
+cwd = "D:/GraduationProject/backend"
+enabled = true
+required = false
+startup_timeout_sec = 20
+tool_timeout_sec = 60

@@ -6,7 +6,7 @@ from ..ai import build_provider
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Analysis, User
+from ..models import Analysis, LearningPath, User, utc_now
 from ..schemas import (
     AnalysisRequest,
     AnalysisResponse,
@@ -14,6 +14,7 @@ from ..schemas import (
     HistoryResponse,
     MessageResponse,
 )
+from .vocabulary import upsert_analysis_vocabulary
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -26,6 +27,28 @@ async def create_analysis(
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
 ):
+    learning_path = None
+    if request.learning_path_id:
+        learning_path = db.scalar(
+            select(LearningPath).where(
+                LearningPath.id == request.learning_path_id,
+                LearningPath.user_id == user.id,
+            )
+        )
+        if learning_path is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learning path not found")
+        if request.task_day is not None:
+            task_days = {
+                task.get("day")
+                for task in learning_path.plan.get("daily_tasks", [])
+                if isinstance(task, dict)
+            }
+            if request.task_day not in task_days:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Task day not found",
+                )
+
     try:
         provider = build_provider(settings)
         result = await provider.analyze(analysis_type, request.input_text)
@@ -40,8 +63,22 @@ async def create_analysis(
         result=result,
         score=float(score) if score is not None else None,
         provider=provider.name,
+        learning_path_id=learning_path.id if learning_path else None,
+        task_day=request.task_day,
     )
     db.add(analysis)
+    db.flush()
+    if analysis_type == "reading":
+        upsert_analysis_vocabulary(db, user, analysis)
+    if learning_path is not None and request.task_day is not None:
+        progress = dict(learning_path.daily_progress or {})
+        progress[str(request.task_day)] = {
+            **dict(progress.get(str(request.task_day), {})),
+            "completed": True,
+            "completed_at": utc_now().isoformat(),
+            "analysis_id": analysis.id,
+        }
+        learning_path.daily_progress = progress
     db.commit()
     db.refresh(analysis)
     return AnalysisResponse.model_validate(analysis)

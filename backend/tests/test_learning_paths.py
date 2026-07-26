@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.models import User
+from app.models import LearnerProfile, User, utc_now
 
 
 def register(client: TestClient, email: str) -> dict:
@@ -24,6 +24,13 @@ def promote(db_session, email: str) -> None:
     db_session.commit()
 
 
+def allow_path_regeneration(db_session, user_id: str) -> None:
+    profile = db_session.get(LearnerProfile, user_id)
+    assert profile is not None
+    profile.onboarding_completed_at = utc_now()
+    db_session.commit()
+
+
 def test_learning_path_requires_authentication_and_valid_input(client):
     missing_auth = client.post(
         "/api/v1/learning-paths/generate",
@@ -40,8 +47,9 @@ def test_learning_path_requires_authentication_and_valid_input(client):
     assert invalid.status_code == 422
 
 
-def test_generate_current_history_and_delete_personalized_path(client):
+def test_generate_current_history_and_delete_personalized_path(client, db_session):
     learner = register(client, "path-owner@example.com")
+    allow_path_regeneration(db_session, learner["user"]["id"])
     headers = auth_header(learner["access_token"])
     client.post(
         "/api/v1/analyses/writing",
@@ -86,6 +94,7 @@ def test_learning_paths_are_isolated_and_administrator_can_moderate(client, db_s
     stranger = register(client, "path-stranger@example.com")
     admin = register(client, "path-admin@example.com")
     promote(db_session, "path-admin@example.com")
+    allow_path_regeneration(db_session, owner["user"]["id"])
 
     generated = client.post(
         "/api/v1/learning-paths/generate",

@@ -5,6 +5,9 @@ import '../../core/api_client.dart';
 import '../../core/auth_controller.dart';
 import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
+import '../classes/classes_page.dart';
+import '../vocabulary/vocabulary_detail_page.dart';
+import 'dashboard_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -25,6 +28,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _dashboardKey = GlobalKey<DashboardPageState>();
+  final _studyKey = GlobalKey<_StudyPageState>();
   final _learningPathKey = GlobalKey<_LearningPathPageState>();
   final _historyKey = GlobalKey<_HistoryPageState>();
   late final OcrService _ocrService;
@@ -38,21 +43,54 @@ class _HomePageState extends State<HomePage> {
     _ocrService = widget.ocrService ?? MlKitOcrService();
     _speechService = widget.speechService ?? DeviceSpeechService();
     _pages = [
+      DashboardPage(
+        key: _dashboardKey,
+        apiClient: widget.apiClient,
+        displayName:
+            widget.authController.user?['display_name']?.toString() ?? 'bạn',
+        onOpenLearningPath: _openLearningPath,
+        onOpenClasses: () => _selectPage(2),
+        onOpenStudy: _openStudyTask,
+      ),
       _StudyPage(
+        key: _studyKey,
         apiClient: widget.apiClient,
         ocrService: _ocrService,
         speechService: _speechService,
       ),
-      _LearningPathPage(key: _learningPathKey, apiClient: widget.apiClient),
+      ClassesPage(apiClient: widget.apiClient),
       _HistoryPage(key: _historyKey, apiClient: widget.apiClient),
       _ProfilePage(authController: widget.authController),
     ];
   }
 
   void _selectPage(int index) {
+    if (index == 1) _studyKey.currentState?.setTaskContext(null);
     setState(() => _selectedIndex = index);
-    if (index == 1) _learningPathKey.currentState?.refresh();
-    if (index == 2) _historyKey.currentState?.refresh();
+    if (index == 0) _dashboardKey.currentState?.refresh();
+    if (index == 3) _historyKey.currentState?.refresh();
+  }
+
+  void _openStudyTask(Map<String, dynamic>? task) {
+    _studyKey.currentState?.setTaskContext(task);
+    setState(() => _selectedIndex = 1);
+  }
+
+  Future<void> _openLearningPath() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Lộ trình cá nhân')),
+          body: SafeArea(
+            child: _LearningPathPage(
+              key: _learningPathKey,
+              apiClient: widget.apiClient,
+            ),
+          ),
+        ),
+      ),
+    );
+    if (mounted) _dashboardKey.currentState?.refresh();
   }
 
   @override
@@ -66,14 +104,19 @@ class _HomePageState extends State<HomePage> {
         onDestinationSelected: _selectPage,
         destinations: const [
           NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.school_outlined),
             selectedIcon: Icon(Icons.school),
             label: 'Học',
           ),
           NavigationDestination(
-            icon: Icon(Icons.route_outlined),
-            selectedIcon: Icon(Icons.route),
-            label: 'Lộ trình',
+            icon: Icon(Icons.groups_outlined),
+            selectedIcon: Icon(Icons.groups),
+            label: 'Lớp',
           ),
           NavigationDestination(icon: Icon(Icons.history), label: 'Lịch sử'),
           NavigationDestination(
@@ -105,6 +148,12 @@ class _LearningPathPageState extends State<_LearningPathPage> {
   int _minutes = 30;
   bool _loading = true;
   bool _generating = false;
+  bool _placementSubmitting = false;
+  bool _adapting = false;
+  int? _progressDay;
+  List<Map<String, dynamic>>? _placementQuestions;
+  final Map<String, String> _placementAnswers = {};
+  Map<String, dynamic>? _placementResult;
   String? _error;
 
   @override
@@ -131,6 +180,7 @@ class _LearningPathPageState extends State<_LearningPathPage> {
       if (!mounted) return;
       setState(() {
         _learningPath = result;
+        _placementQuestions = null;
         _goalController.text =
             result['goal']?.toString() ?? _goalController.text;
         _level = result['current_level']?.toString() ?? _level;
@@ -140,6 +190,32 @@ class _LearningPathPageState extends State<_LearningPathPage> {
       if (!mounted) return;
       if (exception.statusCode == 404) {
         setState(() => _learningPath = null);
+        try {
+          final placement = await widget.apiClient.latestPlacementResult();
+          if (mounted) {
+            setState(() {
+              _placementResult = placement;
+              _level = placement['level']?.toString() ?? _level;
+            });
+          }
+        } on ApiException catch (placementException) {
+          if (placementException.statusCode != 404 && mounted) {
+            setState(() => _error = placementException.message);
+          }
+        }
+        try {
+          final test = await widget.apiClient.placementTest();
+          if (mounted) {
+            setState(() {
+              _placementQuestions =
+                  (test['questions'] as List<dynamic>? ?? const [])
+                      .whereType<Map<String, dynamic>>()
+                      .toList();
+            });
+          }
+        } catch (_) {
+          // Keep the existing path form usable if the optional placement screen fails to load.
+        }
       } else {
         setState(() => _error = exception.message);
       }
@@ -173,6 +249,70 @@ class _LearningPathPageState extends State<_LearningPathPage> {
       if (mounted) setState(() => _error = 'Không thể kết nối máy chủ.');
     } finally {
       if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  Future<void> _submitPlacement() async {
+    if (_placementQuestions == null ||
+        _placementAnswers.length != _placementQuestions!.length) {
+      setState(() => _error = 'Hãy trả lời đủ các câu hỏi trước khi nộp bài.');
+      return;
+    }
+    setState(() {
+      _placementSubmitting = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.submitPlacementTest(
+        _placementAnswers,
+      );
+      if (!mounted) return;
+      setState(() {
+        _placementResult = result;
+        _level = result['level']?.toString() ?? _level;
+        _placementQuestions = null;
+      });
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } finally {
+      if (mounted) setState(() => _placementSubmitting = false);
+    }
+  }
+
+  Future<void> _toggleDay(int day, bool completed) async {
+    final path = _learningPath;
+    if (path == null) return;
+    setState(() => _progressDay = day);
+    try {
+      final result = await widget.apiClient.updateDailyProgress(
+        learningPathId: path['id'].toString(),
+        day: day,
+        completed: completed,
+      );
+      if (mounted) setState(() => _learningPath = result);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } finally {
+      if (mounted) setState(() => _progressDay = null);
+    }
+  }
+
+  Future<void> _adapt() async {
+    final path = _learningPath;
+    if (path == null) return;
+    setState(() {
+      _adapting = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.apiClient.adaptLearningPath(
+        path['id'].toString(),
+      );
+      if (mounted) setState(() => _learningPath = result);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } finally {
+      if (mounted) setState(() => _adapting = false);
     }
   }
 
@@ -293,6 +433,17 @@ class _LearningPathPageState extends State<_LearningPathPage> {
             const Center(child: CircularProgressIndicator()),
           ] else if (plan == null) ...[
             const SizedBox(height: 14),
+            if (_placementQuestions != null)
+              _PlacementTestCard(
+                questions: _placementQuestions!,
+                answers: _placementAnswers,
+                submitting: _placementSubmitting,
+                result: _placementResult,
+                onAnswer: (id, answer) {
+                  setState(() => _placementAnswers[id] = answer);
+                },
+                onSubmit: _submitPlacement,
+              ),
             const _MessageCard(
               message:
                   'Chưa có lộ trình. Chọn mục tiêu và tạo kế hoạch đầu tiên.',
@@ -302,9 +453,114 @@ class _LearningPathPageState extends State<_LearningPathPage> {
             _LearningPathResultCard(
               learningPath: _learningPath!,
               tasks: _items(plan, 'daily_tasks'),
+              progressDay: _progressDay,
+              adapting: _adapting,
+              onToggleDay: _toggleDay,
+              onAdapt: _adapt,
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _PlacementTestCard extends StatelessWidget {
+  const _PlacementTestCard({
+    required this.questions,
+    required this.answers,
+    required this.submitting,
+    required this.result,
+    required this.onAnswer,
+    required this.onSubmit,
+  });
+
+  final List<Map<String, dynamic>> questions;
+  final Map<String, String> answers;
+  final bool submitting;
+  final Map<String, dynamic>? result;
+  final void Function(String id, String answer) onAnswer;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Placement test',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Làm bài kiểm tra ngắn để chọn trình độ bắt đầu phù hợp. Kết quả chỉ là ước lượng học tập, không phải chứng chỉ CEFR.',
+            ),
+            const SizedBox(height: 14),
+            ...questions.map((question) {
+              final id = question['id'].toString();
+              final options =
+                  (question['options'] as List<dynamic>? ?? const [])
+                      .map((option) => option.toString())
+                      .toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${questions.indexOf(question) + 1}. ${question['prompt']}',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  RadioGroup<String>(
+                    groupValue: answers[id],
+                    onChanged: (value) {
+                      if (value != null) onAnswer(id, value);
+                    },
+                    child: Column(
+                      children: options
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              value: String.fromCharCode(97 + entry.key),
+                              title: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              );
+            }),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: submitting ? null : onSubmit,
+                icon: submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.fact_check_outlined),
+                label: Text(
+                  submitting ? 'Đang chấm bài...' : 'Nộp placement test',
+                ),
+              ),
+            ),
+            if (result != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Trình độ ước lượng: ${result!['level']} (${result!['score']}/${result!['total_questions']})',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -314,10 +570,18 @@ class _LearningPathResultCard extends StatelessWidget {
   const _LearningPathResultCard({
     required this.learningPath,
     required this.tasks,
+    required this.progressDay,
+    required this.adapting,
+    required this.onToggleDay,
+    required this.onAdapt,
   });
 
   final Map<String, dynamic> learningPath;
   final List<Map<String, dynamic>> tasks;
+  final int? progressDay;
+  final bool adapting;
+  final void Function(int day, bool completed) onToggleDay;
+  final VoidCallback onAdapt;
 
   List<String> _strings(Map<String, dynamic> plan, String key) {
     return (plan[key] as List<dynamic>? ?? const [])
@@ -331,6 +595,15 @@ class _LearningPathResultCard extends StatelessWidget {
     final focusAreas = _strings(plan, 'focus_areas');
     final notes = _strings(plan, 'personalization_notes');
     final checkpoints = _strings(plan, 'checkpoints');
+    final progress =
+        (learningPath['daily_progress'] as Map<dynamic, dynamic>?)?.map(
+          (key, value) => MapEntry(key.toString(), value),
+        ) ??
+        <String, dynamic>{};
+    final completedDays = progress.values
+        .whereType<Map<dynamic, dynamic>>()
+        .where((item) => item['completed'] == true)
+        .length;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -351,6 +624,24 @@ class _LearningPathResultCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(plan['summary']?.toString() ?? ''),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text('Tiến độ: $completedDays/${tasks.length} ngày'),
+                const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: adapting ? null : onAdapt,
+                  icon: adapting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync),
+                  label: const Text('Điều chỉnh'),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             Text('Trọng tâm', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
@@ -391,6 +682,16 @@ class _LearningPathResultCard extends StatelessWidget {
                 title: Text(task['title']?.toString() ?? 'Nhiệm vụ'),
                 subtitle: Text(
                   '${task['duration_minutes']} phút · ${task['skill']}',
+                ),
+                trailing: Checkbox(
+                  value:
+                      ((progress[task['day'].toString()]
+                          as Map?)?['completed']) ==
+                      true,
+                  onChanged: progressDay == task['day']
+                      ? null
+                      : (value) =>
+                            onToggleDay(task['day'] as int, value ?? false),
                 ),
                 children: [
                   Align(
@@ -437,6 +738,7 @@ class _LearningPathResultCard extends StatelessWidget {
 
 class _StudyPage extends StatefulWidget {
   const _StudyPage({
+    super.key,
     required this.apiClient,
     required this.ocrService,
     required this.speechService,
@@ -453,11 +755,31 @@ class _StudyPage extends StatefulWidget {
 class _StudyPageState extends State<_StudyPage> {
   final _textController = TextEditingController();
   String _mode = 'reading';
+  Map<String, dynamic>? _taskContext;
   Map<String, dynamic>? _result;
+  bool _taskProgressRecorded = false;
   bool _loading = false;
   bool _capturing = false;
   bool _listening = false;
   String? _error;
+
+  void setTaskContext(Map<String, dynamic>? task) {
+    widget.speechService.stop();
+    final requestedSkill = task?['skill']?.toString().toLowerCase();
+    final mode =
+        const {'reading', 'writing', 'speaking'}.contains(requestedSkill)
+        ? requestedSkill!
+        : _mode;
+    setState(() {
+      _taskContext = task == null ? null : Map<String, dynamic>.from(task);
+      _mode = mode;
+      _result = null;
+      _error = null;
+      _listening = false;
+      _taskProgressRecorded = false;
+      if (task != null) _textController.clear();
+    });
+  }
 
   @override
   void dispose() {
@@ -478,12 +800,22 @@ class _StudyPageState extends State<_StudyPage> {
       _result = null;
     });
     try {
+      final learningPathId = _taskText(const [
+        'learning_path_id',
+        'learningPathId',
+      ]);
+      final taskDay = _taskInt(const ['day', 'task_day', 'taskDay']);
       final response = await widget.apiClient.analyze(
         type: _mode,
         inputText: text,
+        learningPathId: learningPathId,
+        taskDay: taskDay,
       );
       if (mounted) {
-        setState(() => _result = response['result'] as Map<String, dynamic>);
+        setState(() {
+          _result = response['result'] as Map<String, dynamic>;
+          _taskProgressRecorded = learningPathId != null && taskDay != null;
+        });
       }
     } on ApiException catch (exception) {
       if (mounted) setState(() => _error = exception.message);
@@ -567,9 +899,32 @@ class _StudyPageState extends State<_StudyPage> {
     });
   }
 
+  String? _taskText(List<String> keys) {
+    final task = _taskContext;
+    if (task == null) return null;
+    for (final key in keys) {
+      final value = task[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  int? _taskInt(List<String> keys) {
+    final task = _taskContext;
+    if (task == null) return null;
+    for (final key in keys) {
+      final value = task[key];
+      if (value is int) return value;
+      final parsed = int.tryParse(value?.toString() ?? '');
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const Key('study-page'),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
       children: [
         Text('Xin chào 👋', style: Theme.of(context).textTheme.headlineSmall),
@@ -578,6 +933,13 @@ class _StudyPageState extends State<_StudyPage> {
           'Học một chút tiếng Anh mỗi ngày',
           style: Theme.of(context).textTheme.bodyLarge,
         ),
+        if (_taskContext != null) ...[
+          const SizedBox(height: 14),
+          _PersonalTaskContextCard(
+            task: _taskContext!,
+            progressRecorded: _taskProgressRecorded,
+          ),
+        ],
         const SizedBox(height: 24),
         Card(
           child: Padding(
@@ -622,6 +984,7 @@ class _StudyPageState extends State<_StudyPage> {
                 if (_mode == 'reading') _buildOcrActions(),
                 if (_mode == 'speaking') _buildSpeechAction(),
                 TextField(
+                  key: const Key('study-input'),
                   controller: _textController,
                   minLines: 5,
                   maxLines: 10,
@@ -641,6 +1004,7 @@ class _StudyPageState extends State<_StudyPage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
+                    key: const Key('analyze-study'),
                     onPressed: _loading ? null : _analyze,
                     icon: _loading
                         ? const SizedBox(
@@ -664,7 +1028,11 @@ class _StudyPageState extends State<_StudyPage> {
         ],
         if (_result != null) ...[
           const SizedBox(height: 14),
-          _ResultCard(result: _result!, type: _mode),
+          _ResultCard(
+            apiClient: widget.apiClient,
+            result: _result!,
+            type: _mode,
+          ),
         ],
       ],
     );
@@ -717,9 +1085,87 @@ class _StudyPageState extends State<_StudyPage> {
   }
 }
 
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.result, required this.type});
+class _PersonalTaskContextCard extends StatelessWidget {
+  const _PersonalTaskContextCard({
+    required this.task,
+    required this.progressRecorded,
+  });
 
+  final Map<String, dynamic> task;
+  final bool progressRecorded;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = task['title']?.toString() ?? 'Nhiệm vụ trong lộ trình';
+    final activity = task['activity']?.toString();
+    final successCriteria = task['success_criteria']?.toString();
+    final skill = task['skill']?.toString();
+    final day = task['day'];
+    final minutes = task['duration_minutes'] ?? task['estimated_minutes'];
+    return Card(
+      key: const Key('personal-task-context'),
+      color: progressRecorded
+          ? Colors.green.shade50
+          : Theme.of(context).colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  progressRecorded ? Icons.check_circle : Icons.route,
+                  color: progressRecorded ? Colors.green : null,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    progressRecorded ? 'Đã ghi nhận tiến độ' : title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            if (progressRecorded) ...[const SizedBox(height: 4), Text(title)],
+            if (activity != null && activity.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(activity),
+            ],
+            if (successCriteria != null && successCriteria.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Hoàn thành khi: $successCriteria',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (day != null || minutes != null || skill != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (day != null) Chip(label: Text('Ngày $day')),
+                  if (minutes != null) Chip(label: Text('$minutes phút')),
+                  if (skill != null) Chip(label: Text(skill)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({
+    required this.apiClient,
+    required this.result,
+    required this.type,
+  });
+
+  final ApiClient apiClient;
   final Map<String, dynamic> result;
   final String type;
 
@@ -792,17 +1238,12 @@ class _ResultCard extends StatelessWidget {
             if (vocabulary.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('Từ vựng', style: Theme.of(context).textTheme.titleSmall),
+              if (type == 'reading')
+                const Text('Các từ này đã được lưu vào Flashcards của bạn.'),
               const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: vocabulary
-                    .map(
-                      (item) => Chip(
-                        label: Text('${item['word']}: ${item['meaning']}'),
-                      ),
-                    )
-                    .toList(),
+              ...vocabulary.map(
+                (item) =>
+                    _VocabularyFlashcard(apiClient: apiClient, item: item),
               ),
             ],
             if (questions.isNotEmpty) ...[
@@ -850,6 +1291,68 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
+class _VocabularyFlashcard extends StatelessWidget {
+  const _VocabularyFlashcard({required this.apiClient, required this.item});
+
+  final ApiClient apiClient;
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final word = item['word']?.toString().trim() ?? '';
+    final meaning = item['meaning']?.toString().trim() ?? '';
+    final example = item['example']?.toString().trim() ?? '';
+    return Card(
+      key: Key('vocabulary-flashcard-$word'),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      margin: const EdgeInsets.only(top: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(word, style: Theme.of(context).textTheme.titleMedium),
+            if (meaning.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(meaning),
+            ],
+            if (example.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                example,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+              ),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: Key('view-word-details-$word'),
+                onPressed: word.isEmpty
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => VocabularyDetailPage(
+                              apiClient: apiClient,
+                              word: word,
+                            ),
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('Xem chi tiết'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HistoryPage extends StatefulWidget {
   const _HistoryPage({super.key, required this.apiClient});
 
@@ -870,7 +1373,9 @@ class _HistoryPageState extends State<_HistoryPage> {
 
   Future<void> refresh() async {
     final next = widget.apiClient.history();
-    setState(() => _future = next);
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 

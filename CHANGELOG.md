@@ -2,6 +2,22 @@
 
 All notable changes to LearnMate AI are recorded here.
 
+## Unreleased
+
+### Added
+
+- Server-resumable learner onboarding for goal, daily study time, a versioned 20-question placement test and automatic learning-path creation.
+- Personalized Home dashboard that combines the learner's daily budget, next personal task and pending class assignments.
+- Dedicated teacher role, class invite codes, member rosters, deadline-based assignments, AI-assisted submissions and teacher feedback.
+- Flutter class joining, assignment submission and onboarding result screens, plus a teacher workspace in the existing web portal.
+- Alembic revision `0005` and cross-role backend, Flutter and web coverage for onboarding and classroom isolation.
+- Dictionary API and Datamuse word details with shared caching, pronunciation audio, collocation chips and Alembic revision `0006`.
+
+### Security
+
+- Teacher access is scoped to owned classes; learners only access joined classes and their own submissions.
+- Placement answer keys remain server-side, and onboarding completion is derived from persisted server state.
+
 ## 0.7.0 - 2026-07-22
 
 ### Added

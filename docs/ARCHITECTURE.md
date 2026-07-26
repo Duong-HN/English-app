@@ -14,10 +14,10 @@ STT text is never presented as evidence of pronunciation accuracy.
 | Component | Technology | Responsibility |
 |---|---|---|
 | Mobile | Flutter 3.41 / Dart 3.11 | Auth, camera, OCR, microphone, learning UI |
-| Admin web | React 19 / Next-compatible vinext | Operations dashboard, moderation and API Console |
+| Teacher/admin web | React 19 / Next-compatible vinext | Teacher classes plus operations and moderation |
 | OCR | ML Kit Text Recognition | Latin text extraction on Android/iOS |
 | STT | Device speech recognition | English transcript capture |
-| API | FastAPI / Python 3.14 | Auth, validation, AI orchestration, learning paths, history |
+| API | FastAPI / Python 3.14 | Auth, onboarding, classes, validation, AI orchestration and history |
 | ORM/migrations | SQLAlchemy / Alembic | Relational persistence and versioned schema |
 | Database | SQLite dev, PostgreSQL prod | Users, analyses, learning paths and audit records |
 | AI | Mock or Gemini | Structured formative feedback |
@@ -46,6 +46,21 @@ API -> Database: summarize up to 20 recent analyses
 API -> Mock/Gemini: summary + fixed seven-day JSON schema
 API -> Database: validate and persist learner-owned path
 API -> Flutter: focus areas, seven tasks and measurable checkpoints
+```
+
+Onboarding and class-work flow:
+
+```text
+Learner -> API: goal code + daily minute budget
+Learner -> API: all 20 placement answers
+API -> Database: placement result + skill scores
+Learner -> API: complete onboarding
+API -> AI/Database: validate and persist one seven-day personal path
+Teacher -> API: class + assignment + deadline
+Learner -> API: invite code, then assignment submission
+API -> AI/Database: structured analysis + idempotent submission
+Teacher -> API: review submission and save feedback
+API -> Learner: home blend of class work and personal path
 ```
 
 Administrator flow:
@@ -82,6 +97,21 @@ Administrative authorization is enforced by the API. The dashboard is only a cli
 `id`, `user_id`, `goal`, `current_level`, `minutes_per_day`, `plan`, `provider`, `created_at`
 
 `learning_paths.user_id` cascades on user deletion. The JSON plan is schema-validated before persistence and always contains seven daily tasks. Personalization is derived from aggregate counts, scores and issue titles rather than sending full historical submissions to the provider.
+
+### onboarding and placement
+
+`learner_profiles` stores one row per learner with a goal code, daily-minute budget and completion timestamp.
+`placement_attempts` stores submitted answers, total score, level, per-skill scores and test version. Public question
+responses never include answer keys. Onboarding status is computed from persisted prerequisites, so a learner can
+resume on another device. A legacy learner with an existing path is backfilled as completed.
+
+### teacher classes
+
+`classes` belongs to exactly one teacher and has a unique invite code. `class_members` is unique by class and learner.
+`assignments` belongs to a class and validates its skill, estimated duration and deadline. `assignment_submissions` is
+unique by assignment and learner and points to the persisted `analyses` result. A resubmission updates the existing
+records. Teacher ownership is enforced on member lists, submission review and feedback; learners can only see classes
+they joined. Administrator access is explicit and does not turn teachers into administrators.
 
 ## Security boundaries
 

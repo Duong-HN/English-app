@@ -8,8 +8,11 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 
 - Email/password registration and JWT login.
 - Secure token storage on the device.
+- Resumable learner onboarding with goal, daily-time preferences and a server-scored 20-question placement test.
+- Home dashboard that blends the personal learning path with deadline-aware class assignments.
+- Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
 - Administrator RBAC, account moderation and immutable audit logs.
-- Responsive web dashboard with live metrics, user/content management and an authenticated API Console.
+- Responsive teacher/administrator web portal for classes, live metrics, moderation and an authenticated API Console.
 - Reading analysis with translation, vocabulary and questions.
 - Writing feedback with issues, score and rewrite.
 - Speaking transcript feedback for relevance, grammar and vocabulary.
@@ -26,8 +29,9 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 ## Architecture
 
 ```text
-Flutter mobile                              Admin web
+Flutter mobile                         Teacher/admin web
   ├─ secure auth token                        ├─ operations dashboard
+  ├─ onboarding + personal/class plan         ├─ classes and assignments
   ├─ camera -> OCR -> editable text           └─ authenticated API Console
   └─ microphone -> STT transcript                       |
                  |                                      |
@@ -78,15 +82,17 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
 
-The learning-path screen creates a measurable seven-day plan from the learner's goal, current CEFR level, available minutes and up to 20 recent analyses. Mock mode is deterministic for local testing; Gemini can generate the same validated structure when enabled.
+On first use, the mobile app resumes the learner at the correct onboarding step, scores all 20 placement questions on the backend and creates a measurable seven-day plan. Home then combines the next personal task with class deadlines. Mock mode is deterministic for local testing; Gemini can generate the same validated structures when enabled.
 
-Administrator dashboard:
+Teacher/administrator portal:
 
 ```powershell
 cd admin-dashboard
 npm install
 npm run dev
 ```
+
+Public registration creates learners. An administrator can promote an account to `teacher`; teachers then use the same web portal to create classes, share invite codes, assign work and review submissions.
 
 Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
 
@@ -140,5 +146,6 @@ Production requirements:
 - [Testing](docs/TEST_PLAN.md)
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)
 - [Git and releases](docs/GIT_WORKFLOW.md)
+- [Codex and LearnMate MCP](docs/MCP.md)
 - [Security](SECURITY.md)
 - [Changelog](CHANGELOG.md)

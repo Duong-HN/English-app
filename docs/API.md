@@ -21,17 +21,56 @@ Analysis request:
 
 ```json
 {
-  "input_text": "The learner's English text"
+  "input_text": "The learner's English text",
+  "learning_path_id": "optional-path-id",
+  "task_day": 3
 }
 ```
 
 Speaking input is a transcript. The API prompt explicitly excludes pronunciation claims.
+When `learning_path_id` and `task_day` are supplied, the analysis is attached to that task and marks the day
+complete after a successful analysis.
+
+## Onboarding
+
+New learner flow is resumable and server-owned:
+
+- `GET /onboarding` — computed state, saved preferences, latest placement result and current learning path.
+- `PATCH /onboarding/preferences` — save `goal` and/or `daily_minutes`.
+- `POST /onboarding/complete` — idempotently generate the validated seven-day path after preferences and placement exist.
+
+Goal codes are `ielts`, `communication`, `study_abroad` and `work`. Daily time choices are `15`, `20`, `30`,
+`45` and `60`. Computed states are `needs_goal`, `needs_daily_time`, `needs_placement`,
+`needs_learning_path` and `completed`. Existing learners who already own a learning path are safely backfilled and
+reported as completed.
+
+```json
+{
+  "goal": "work",
+  "daily_minutes": 30
+}
+```
+
+## Placement test
+
+- `GET /placement-test` — returns the public 20-question diagnostic without answer keys.
+- `POST /placement-test/submit` — requires one `a`/`b`/`c`/`d` answer for every question, stores the attempt and
+  updates the learner's level.
+- `GET /placement-test/latest` — returns the latest diagnostic result.
+
+The result is a starting-level estimate for LearnMate, not an official CEFR certificate. A learning path uses
+the latest placement level when one exists; the existing `current_level` request field remains as a backwards-
+compatible fallback for learners who have not completed the test.
+Each public question identifies its `skill` (`grammar`, `vocabulary` or `reading`). Results include aggregate score,
+CEFR starting level, per-skill correct/total/percentage values and `test_version`.
 
 ## Personalized learning paths
 
 - `POST /learning-paths/generate` — create and persist a seven-day path from the learner's goal, CEFR level, daily minutes and up to 20 recent analyses.
 - `GET /learning-paths/current` — latest path owned by the authenticated learner.
 - `GET /learning-paths?limit=20&offset=0` — learner-owned path history.
+- `PATCH /learning-paths/{id}/days/{day}` — mark a daily task complete/incomplete and optionally save a note.
+- `POST /learning-paths/{id}/adapt` — regenerate tasks from recent results and current completion progress.
 - `DELETE /learning-paths/{id}` — ownership-safe deletion.
 
 Generate request:
@@ -45,6 +84,64 @@ Generate request:
 ```
 
 The response contains exactly seven daily tasks with a skill, duration, activity and measurable success criterion. Supported levels are `A1`, `A2`, `B1`, `B2` and `C1`; daily time is limited to 10–120 minutes.
+
+Each path also returns `daily_progress`, `level_source` (`placement` or `self_reported`) and the associated
+`placement_attempt_id` when available.
+
+## Vocabulary
+
+- `GET /vocabulary?status=new|learning|mastered` — list the learner's flashcards.
+- `POST /vocabulary` — create or update a saved word.
+- `POST /vocabulary/from-analysis/{analysis_id}` — idempotently save vocabulary extracted from a reading analysis.
+- `GET /vocabulary/lookup/{word}` — fetch IPA/audio/meanings plus Datamuse synonyms, antonyms and full
+  collocation phrases for an authenticated learner.
+- `PATCH /vocabulary/{id}` — change review status or example.
+- `DELETE /vocabulary/{id}` — remove a flashcard.
+
+Reading analyses automatically upsert their extracted vocabulary, so words remain available outside the analysis
+JSON result.
+External word details use independent shared cache windows (30 days for Dictionary API and 7 days for Datamuse).
+If a provider is temporarily unavailable, an expired validated entry is returned as a stale fallback; provider
+failures do not overwrite it.
+
+## Teacher classes and assignments
+
+Roles are separate: public registration creates `learner`; an administrator can assign `teacher`; administrator
+access is not implied by the teacher role.
+
+- `POST /classes` — teacher creates a class and receives its unique invite code.
+- `GET /classes` — teacher-owned, learner-joined, or administrator-visible classes.
+- `GET /classes/{id}` — class detail for the owner or a joined learner.
+- `POST /classes/join` — learner joins idempotently with `{ "invite_code": "..." }`.
+- `GET /classes/{id}/members` — private owner/administrator member list.
+- `POST /classes/{id}/assignments` — owner (or administrator) creates an assignment.
+- `GET /classes/{id}/assignments` — owner or joined learner list; learner items include submission state.
+- `POST /assignments/{id}/submit` — joined learner submits/resubmits text for structured AI analysis.
+- `GET /assignments/{id}/submission` — learner retrieves their own analysis and latest teacher feedback.
+- `GET /assignments/{id}/submissions` — owner/administrator review queue.
+- `PATCH /submissions/{id}/feedback` — owner/administrator saves teacher feedback.
+
+```json
+{
+  "title": "Write a work email",
+  "skill": "writing",
+  "content": "Write a polite follow-up email.",
+  "estimated_minutes": 15,
+  "due_at": "2026-07-30T12:00:00Z"
+}
+```
+
+Skills are limited to `reading`, `writing` and `speaking`; deadlines must be future timezone-aware timestamps and
+late submission is rejected. Resubmission updates the same submission and analysis records, so retries do not create
+duplicate work. AI output is nested under `analysis`; feedback is submitted as `{ "feedback": "..." }`.
+
+## Learner home
+
+- `GET /home` — combines the current personal path with upcoming joined-class assignments.
+
+The response includes `daily_minutes`, outstanding `class_assignment_minutes`,
+`remaining_personal_minutes`, class submission/feedback state, the full `personal_learning_path`, and
+`next_personal_task`. Class work consumes the daily budget first but never overwrites the personal learning path.
 
 ## Operations
 
@@ -60,7 +157,8 @@ Validation errors use HTTP `422`, authentication failures `401`, ownership-safe 
 All administration endpoints require a JWT belonging to an active user whose role is `admin`:
 
 - `GET /admin/stats` — users, activity totals, analysis types and seven-day trend.
-- `GET /admin/users?q=&role=&is_active=&limit=&offset=` — searchable user directory.
+- `GET /admin/users?q=&role=&is_active=&limit=&offset=` — searchable user directory; role accepts `learner`,
+  `teacher` or `admin`.
 - `PATCH /admin/users/{id}` — activate/deactivate or promote/demote a user.
 - `GET /admin/analyses?q=&type=&user_id=&limit=&offset=` — cross-user analysis review.
 - `GET /admin/analyses/{id}` — complete analysis details.
