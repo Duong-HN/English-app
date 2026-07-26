@@ -6,6 +6,7 @@ import '../../core/auth_controller.dart';
 import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
 import '../classes/classes_page.dart';
+import '../teacher/teacher_application_page.dart';
 import '../vocabulary/vocabulary_detail_page.dart';
 import 'dashboard_page.dart';
 
@@ -1514,6 +1515,18 @@ class _ProfilePage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
+        OutlinedButton.icon(
+          key: const Key('open-teacher-application'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  TeacherApplicationPage(apiClient: authController.apiClient),
+            ),
+          ),
+          icon: const Icon(Icons.school_outlined),
+          label: const Text('Đăng ký làm giáo viên'),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: authController.logout,
           icon: const Icon(Icons.logout),

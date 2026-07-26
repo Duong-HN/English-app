@@ -46,14 +46,26 @@ def test_admin_can_promote_and_filter_teacher_role(client, db_session):
     set_role(db_session, "teacher-role-admin@example.com", "admin")
     headers = auth_header(admin["access_token"])
 
+    submitted = client.post(
+        "/api/v1/teacher-applications",
+        headers=auth_header(teacher["access_token"]),
+        json={
+            "motivation": (
+                "I have taught English for several years and want to support learners "
+                "in a structured classroom."
+            ),
+            "organization": "Community English Center",
+        },
+    )
     promoted = client.patch(
-        f"/api/v1/admin/users/{teacher['user']['id']}",
+        f"/api/v1/admin/teacher-applications/{submitted.json()['id']}",
         headers=headers,
-        json={"role": "teacher"},
+        json={"status": "approved"},
     )
     listed = client.get("/api/v1/admin/users?role=teacher", headers=headers)
+    assert submitted.status_code == 201, submitted.text
     assert promoted.status_code == 200
-    assert promoted.json()["role"] == "teacher"
+    assert promoted.json()["status"] == "approved"
     assert listed.status_code == 200
     assert any(item["id"] == teacher["user"]["id"] for item in listed.json()["items"])
 

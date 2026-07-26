@@ -2,11 +2,19 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ..db import get_db
 from ..dependencies import require_admin
-from ..models import AdminAuditLog, Analysis, Classroom, LearningPath, User, utc_now
+from ..models import (
+    AdminAuditLog,
+    Analysis,
+    Classroom,
+    LearningPath,
+    TeacherApplication,
+    User,
+    utc_now,
+)
 from ..schemas import (
     AdminAnalysisListResponse,
     AdminAnalysisResponse,
@@ -16,11 +24,14 @@ from ..schemas import (
     AdminLearningPathResponse,
     AdminStatsResponse,
     AdminStatsTrendItem,
+    AdminTeacherApplicationListResponse,
+    AdminTeacherApplicationResponse,
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdate,
     AnalysisType,
     MessageResponse,
+    TeacherApplicationReview,
 )
 
 router = APIRouter(prefix="/admin", tags=["administration"])
@@ -73,6 +84,26 @@ def _learning_path_response(learning_path: LearningPath, user: User) -> AdminLea
         placement_attempt_id=learning_path.placement_attempt_id,
         provider=learning_path.provider,
         created_at=learning_path.created_at,
+    )
+
+
+def _teacher_application_response(
+    application: TeacherApplication,
+    applicant: User,
+    reviewer: User | None,
+) -> AdminTeacherApplicationResponse:
+    return AdminTeacherApplicationResponse(
+        id=application.id,
+        user_id=application.user_id,
+        motivation=application.motivation,
+        organization=application.organization,
+        status=application.status,
+        review_note=application.review_note,
+        requested_at=application.requested_at,
+        reviewed_at=application.reviewed_at,
+        applicant_email=applicant.email,
+        applicant_display_name=applicant.display_name,
+        reviewer_email=reviewer.email if reviewer is not None else None,
     )
 
 
@@ -242,6 +273,11 @@ def update_user(
         )
     _ensure_another_active_admin(db, target, update)
     _ensure_teacher_has_no_owned_classes(db, target, update)
+    if update.role == "teacher" and target.role != "teacher":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Teacher access is granted by approving a teacher application",
+        )
 
     changes: dict[str, dict[str, str | bool]] = {}
     if update.is_active is not None and update.is_active != target.is_active:
@@ -271,6 +307,101 @@ def update_user(
         db.scalar(select(func.count()).select_from(Analysis).where(Analysis.user_id == target.id)) or 0
     )
     return _user_response(target, analysis_count)
+
+
+@router.get(
+    "/teacher-applications",
+    response_model=AdminTeacherApplicationListResponse,
+)
+def list_teacher_applications(
+    application_status: str | None = Query(
+        default=None,
+        alias="status",
+        pattern="^(pending|approved|rejected)$",
+    ),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    filters = []
+    if application_status:
+        filters.append(TeacherApplication.status == application_status)
+
+    applicant = aliased(User)
+    reviewer = aliased(User)
+    total = db.scalar(select(func.count()).select_from(TeacherApplication).where(*filters)) or 0
+    rows = db.execute(
+        select(TeacherApplication, applicant, reviewer)
+        .join(applicant, TeacherApplication.user_id == applicant.id)
+        .outerjoin(reviewer, TeacherApplication.reviewed_by_id == reviewer.id)
+        .where(*filters)
+        .order_by(TeacherApplication.requested_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return AdminTeacherApplicationListResponse(
+        items=[
+            _teacher_application_response(item, applicant_user, reviewer_user)
+            for item, applicant_user, reviewer_user in rows
+        ],
+        total=total,
+    )
+
+
+@router.patch(
+    "/teacher-applications/{application_id}",
+    response_model=AdminTeacherApplicationResponse,
+)
+def review_teacher_application(
+    application_id: str,
+    review: TeacherApplicationReview,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    application = db.get(TeacherApplication, application_id)
+    if application is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Teacher application not found")
+    if application.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending teacher applications can be reviewed",
+        )
+
+    applicant = db.get(User, application.user_id)
+    if applicant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Applicant not found")
+    if not applicant.is_active or applicant.role != "learner":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Applicant must remain an active learner until the application is reviewed",
+        )
+
+    now = utc_now()
+    application.status = review.status
+    application.review_note = review.review_note
+    application.reviewed_by_id = admin.id
+    application.reviewed_at = now
+    application.updated_at = now
+    if review.status == "approved":
+        applicant.role = "teacher"
+        applicant.updated_at = now
+
+    _record_audit(
+        db,
+        admin,
+        action=f"teacher_application.{review.status}",
+        target_type="teacher_application",
+        target_id=application.id,
+        details={
+            "applicant_id": applicant.id,
+            "status": review.status,
+            "review_note": review.review_note,
+        },
+    )
+    db.commit()
+    db.refresh(application)
+    return _teacher_application_response(application, applicant, admin)
 
 
 @router.get("/analyses", response_model=AdminAnalysisListResponse)

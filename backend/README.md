@@ -44,7 +44,9 @@ Remove-Item Env:ADMIN_PASSWORD
 ```
 
 The command creates a new administrator or safely promotes an existing account. Public registration always creates a
-learner account. Administrators can assign the separate `teacher` role through `PATCH /api/v1/admin/users/{id}`.
+learner account. Learners submit teacher applications through `POST /api/v1/teacher-applications`; administrators
+approve or reject them through `PATCH /api/v1/admin/teacher-applications/{id}`. Direct learner-to-teacher role changes
+are rejected so every teacher account has an auditable approval record.
 
 ## Quality checks
 

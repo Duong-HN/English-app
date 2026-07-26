@@ -34,6 +34,12 @@ export const API_PRESETS: ApiPreset[] = [
     path: "/api/v1/admin/users?limit=20&offset=0",
   },
   {
+    name: "Hồ sơ giáo viên chờ duyệt",
+    description: "Đọc các hồ sơ học viên đang chờ quản trị viên xem xét.",
+    method: "GET",
+    path: "/api/v1/admin/teacher-applications?status=pending&limit=20&offset=0",
+  },
+  {
     name: "Danh sách phân tích",
     description: "Đọc các kết quả AI mới nhất.",
     method: "GET",

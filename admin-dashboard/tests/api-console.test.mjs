@@ -74,6 +74,45 @@ test("requests learning paths with admin authorization and encoded filters", asy
   }
 });
 
+test("reviews teacher applications through the administrator API", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), method: init?.method ?? "GET", body: init?.body, headers: new Headers(init?.headers) });
+    if ((init?.method ?? "GET") === "GET") {
+      return Response.json({ items: [], total: 0 });
+    }
+    return Response.json({
+      id: "application-1",
+      user_id: "learner-1",
+      motivation: "I have taught English for several years.",
+      organization: null,
+      status: "approved",
+      review_note: "Approved.",
+      requested_at: "2026-07-22T00:00:00Z",
+      reviewed_at: "2026-07-23T00:00:00Z",
+      applicant_email: "learner@example.com",
+      applicant_display_name: "Learner",
+      reviewer_email: "admin@example.com",
+    });
+  };
+
+  try {
+    const api = new AdminApi("https://api.example.test", "admin-jwt");
+    const listed = await api.teacherApplications({ status: "pending", limit: 20, offset: 0 });
+    const reviewed = await api.reviewTeacherApplication("application-1", "approved", "Approved.");
+
+    assert.equal(listed.total, 0);
+    assert.equal(reviewed.status, "approved");
+    assert.equal(requests[0].url, "https://api.example.test/api/v1/admin/teacher-applications?status=pending&limit=20&offset=0");
+    assert.equal(requests[0].headers.get("Authorization"), "Bearer admin-jwt");
+    assert.equal(requests[1].method, "PATCH");
+    assert.deepEqual(JSON.parse(requests[1].body), { status: "approved", review_note: "Approved." });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("teacher API creates a class and sends feedback with bearer authorization", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];

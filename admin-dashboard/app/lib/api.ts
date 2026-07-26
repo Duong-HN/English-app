@@ -11,6 +11,20 @@ export type AdminUser = {
   analysis_count: number;
 };
 
+export type TeacherApplication = {
+  id: string;
+  user_id: string;
+  motivation: string;
+  organization: string | null;
+  status: "pending" | "approved" | "rejected";
+  review_note: string | null;
+  requested_at: string;
+  reviewed_at: string | null;
+  applicant_email: string;
+  applicant_display_name: string;
+  reviewer_email: string | null;
+};
+
 export type TeacherClass = {
   id: string;
   teacher_id: string;
@@ -348,6 +362,33 @@ export class AdminApi {
       method: "PATCH",
       body: JSON.stringify(update),
     });
+  }
+
+  teacherApplications(filters: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    return this.request<Page<TeacherApplication>>(
+      `/api/v1/admin/teacher-applications${queryString(filters)}`,
+    );
+  }
+
+  reviewTeacherApplication(
+    applicationId: string,
+    status: "approved" | "rejected",
+    reviewNote?: string,
+  ) {
+    return this.request<TeacherApplication>(
+      `/api/v1/admin/teacher-applications/${encodeURIComponent(applicationId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          ...(reviewNote?.trim() ? { review_note: reviewNote.trim() } : {}),
+        }),
+      },
+    );
   }
 
   classes() {

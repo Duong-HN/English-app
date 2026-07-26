@@ -106,8 +106,19 @@ failures do not overwrite it.
 
 ## Teacher classes and assignments
 
-Roles are separate: public registration creates `learner`; an administrator can assign `teacher`; administrator
-access is not implied by the teacher role.
+Roles are separate: public registration creates `learner`; a learner can submit a teacher application; an
+administrator must approve it before the account becomes `teacher`. Administrator access is not implied by the
+teacher role.
+
+### Teacher applications
+
+- `GET /teacher-applications/me` — learner reads their current application, or `{"application": null}` when none exists.
+- `POST /teacher-applications` — learner submits a motivation and optional organization. A rejected application can be resubmitted.
+- `GET /admin/teacher-applications?status=pending|approved|rejected&limit=&offset=` — administrator reviews applications.
+- `PATCH /admin/teacher-applications/{id}` — administrator approves or rejects a pending application and can add a review note.
+
+Approval changes the applicant's role to `teacher`; rejection leaves the account as `learner`. Directly changing a
+learner to `teacher` through `/admin/users/{id}` is rejected so every teacher account has a review record.
 
 - `POST /classes` — teacher creates a class and receives its unique invite code.
 - `GET /classes` — teacher-owned, learner-joined, or administrator-visible classes.
@@ -159,7 +170,9 @@ All administration endpoints require a JWT belonging to an active user whose rol
 - `GET /admin/stats` — users, activity totals, analysis types and seven-day trend.
 - `GET /admin/users?q=&role=&is_active=&limit=&offset=` — searchable user directory; role accepts `learner`,
   `teacher` or `admin`.
-- `PATCH /admin/users/{id}` — activate/deactivate or promote/demote a user.
+- `PATCH /admin/users/{id}` — activate/deactivate or change administrative/learner access. Teacher access is granted through the teacher-application workflow.
+- `GET /admin/teacher-applications?status=&limit=&offset=` — review learner teacher applications.
+- `PATCH /admin/teacher-applications/{id}` — approve or reject a pending teacher application.
 - `GET /admin/analyses?q=&type=&user_id=&limit=&offset=` — cross-user analysis review.
 - `GET /admin/analyses/{id}` — complete analysis details.
 - `DELETE /admin/analyses/{id}` — moderated deletion.
