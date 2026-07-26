@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -7,6 +7,14 @@ from .ai_schemas import LearningPathResult
 
 AnalysisType = Literal["reading", "writing", "speaking"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
+GoalCode = Literal["ielts", "communication", "study_abroad", "work"]
+OnboardingStatus = Literal[
+    "needs_goal",
+    "needs_daily_time",
+    "needs_placement",
+    "needs_learning_path",
+    "completed",
+]
 
 
 class RegisterRequest(BaseModel):
@@ -48,6 +56,14 @@ class TokenResponse(BaseModel):
 
 class AnalysisRequest(BaseModel):
     input_text: str = Field(min_length=3, max_length=10000)
+    learning_path_id: str | None = Field(default=None, max_length=64)
+    task_day: int | None = Field(default=None, ge=1, le=7)
+
+    @model_validator(mode="after")
+    def validate_task_context(self):
+        if self.task_day is not None and self.learning_path_id is None:
+            raise ValueError("learning_path_id is required when task_day is provided")
+        return self
 
     @field_validator("input_text")
     @classmethod
@@ -67,6 +83,8 @@ class AnalysisResponse(BaseModel):
     result: dict
     score: float | None
     provider: str
+    learning_path_id: str | None
+    task_day: int | None
     created_at: datetime
 
 
@@ -89,6 +107,18 @@ class LearningPathGenerateRequest(BaseModel):
         return cleaned
 
 
+class DailyProgress(BaseModel):
+    completed: bool = False
+    completed_at: datetime | None = None
+    analysis_id: str | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class DailyProgressUpdate(BaseModel):
+    completed: bool
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class LearningPathResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -97,6 +127,9 @@ class LearningPathResponse(BaseModel):
     current_level: LearningLevel
     minutes_per_day: int
     plan: LearningPathResult
+    daily_progress: dict[str, DailyProgress]
+    level_source: Literal["placement", "self_reported"]
+    placement_attempt_id: str | None
     provider: str
     created_at: datetime
 
@@ -104,6 +137,310 @@ class LearningPathResponse(BaseModel):
 class LearningPathListResponse(BaseModel):
     items: list[LearningPathResponse]
     total: int
+
+
+class PlacementQuestionResponse(BaseModel):
+    id: str
+    prompt: str
+    options: list[str]
+    skill: Literal["grammar", "vocabulary", "reading"]
+
+
+class PlacementTestResponse(BaseModel):
+    questions: list[PlacementQuestionResponse]
+    total_questions: int
+    test_version: str
+
+
+class PlacementSubmitRequest(BaseModel):
+    answers: dict[str, str] = Field(min_length=20, max_length=20)
+
+    @field_validator("answers")
+    @classmethod
+    def normalize_answers(cls, value: dict[str, str]) -> dict[str, str]:
+        return {key.strip(): answer.strip().lower() for key, answer in value.items()}
+
+
+class PlacementResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    score: int
+    total_questions: int
+    level: LearningLevel
+    skill_scores: dict[str, dict[str, int | float]]
+    test_version: str
+    completed_at: datetime
+
+
+class OnboardingPreferencesUpdate(BaseModel):
+    goal: GoalCode | None = None
+    daily_minutes: Literal[15, 20, 30, 45, 60] | None = None
+
+    @model_validator(mode="after")
+    def require_preference(self):
+        provided = self.model_fields_set.intersection({"goal", "daily_minutes"})
+        if not provided or any(getattr(self, field) is None for field in provided):
+            raise ValueError("Provide a non-null goal and/or daily_minutes")
+        return self
+
+
+class OnboardingResponse(BaseModel):
+    status: OnboardingStatus
+    goal: str | None
+    daily_minutes: int | None
+    onboarding_completed_at: datetime | None
+    updated_at: datetime | None
+    placement_result: PlacementResultResponse | None
+    learning_path: LearningPathResponse | None
+
+
+class ClassCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name", "description")
+    @classmethod
+    def clean_class_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("value must contain non-whitespace characters")
+        return cleaned
+
+
+class ClassJoinRequest(BaseModel):
+    invite_code: str = Field(min_length=6, max_length=24)
+
+    @field_validator("invite_code")
+    @classmethod
+    def normalize_invite_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class ClassResponse(BaseModel):
+    id: str
+    teacher_id: str
+    teacher_name: str
+    name: str
+    description: str | None
+    invite_code: str | None
+    member_count: int
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class ClassListResponse(BaseModel):
+    items: list[ClassResponse]
+    total: int
+
+
+class ClassMemberResponse(BaseModel):
+    id: str
+    learner_id: str
+    email: EmailStr
+    display_name: str
+    level: str | None
+    joined_at: datetime
+
+
+class ClassMemberListResponse(BaseModel):
+    items: list[ClassMemberResponse]
+    total: int
+
+
+class AssignmentCreateRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    skill: AnalysisType
+    content: str = Field(min_length=3, max_length=10000)
+    estimated_minutes: int = Field(ge=5, le=120)
+    due_at: datetime
+
+    @field_validator("title", "content")
+    @classmethod
+    def clean_assignment_text(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("value must contain non-whitespace characters")
+        return cleaned
+
+    @field_validator("due_at")
+    @classmethod
+    def require_future_deadline(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("due_at must include a timezone")
+        if value.astimezone(UTC) <= datetime.now(UTC):
+            raise ValueError("due_at must be in the future")
+        return value
+
+
+class AssignmentResponse(BaseModel):
+    id: str
+    class_id: str
+    class_name: str
+    created_by_id: str
+    title: str
+    skill: AnalysisType
+    content: str
+    estimated_minutes: int
+    due_at: datetime
+    created_at: datetime
+    updated_at: datetime | None
+    submission_id: str | None = None
+    submission_status: str | None = None
+    teacher_feedback: str | None = None
+
+
+class AssignmentListResponse(BaseModel):
+    items: list[AssignmentResponse]
+    total: int
+
+
+class AssignmentSubmitRequest(BaseModel):
+    input_text: str = Field(min_length=3, max_length=10000)
+
+    @field_validator("input_text")
+    @classmethod
+    def clean_submission(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 3:
+            raise ValueError("input_text must contain at least 3 non-whitespace characters")
+        return cleaned
+
+
+class SubmissionFeedbackUpdate(BaseModel):
+    feedback: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("feedback")
+    @classmethod
+    def clean_feedback(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("feedback must contain non-whitespace characters")
+        return cleaned
+
+
+class AssignmentSubmissionResponse(BaseModel):
+    id: str
+    assignment_id: str
+    learner_id: str
+    learner_name: str
+    status: str
+    input_text: str
+    analysis: AnalysisResponse | None
+    teacher_feedback: str | None
+    submitted_at: datetime
+    feedback_at: datetime | None
+    updated_at: datetime | None
+
+
+class AssignmentSubmissionListResponse(BaseModel):
+    items: list[AssignmentSubmissionResponse]
+    total: int
+
+
+class HomeClassAssignmentResponse(BaseModel):
+    assignment_id: str
+    class_id: str
+    class_name: str
+    title: str
+    skill: AnalysisType
+    content: str
+    estimated_minutes: int
+    due_at: datetime
+    submission_id: str | None
+    submission_status: str | None
+    teacher_feedback: str | None
+
+
+class HomePersonalTaskResponse(BaseModel):
+    learning_path_id: str
+    day: int
+    title: str
+    skill: str
+    activity: str
+    duration_minutes: int
+    success_criteria: str
+
+
+class HomeResponse(BaseModel):
+    goal: str | None
+    current_level: str | None
+    daily_minutes: int
+    class_assignment_minutes: int
+    remaining_personal_minutes: int
+    total_planned_minutes: int
+    class_assignments: list[HomeClassAssignmentResponse]
+    personal_learning_path: LearningPathResponse | None
+    next_personal_task: HomePersonalTaskResponse | None
+
+
+class VocabularyCreateRequest(BaseModel):
+    word: str = Field(min_length=1, max_length=120)
+    meaning: str = Field(min_length=1, max_length=2000)
+    example: str | None = Field(default=None, max_length=4000)
+    analysis_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("word", "meaning", "example")
+    @classmethod
+    def clean_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("value must contain non-whitespace characters")
+        return cleaned
+
+
+class VocabularyUpdateRequest(BaseModel):
+    status: Literal["new", "learning", "mastered"] | None = None
+    example: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("example")
+    @classmethod
+    def clean_example(cls, value: str | None) -> str | None:
+        return " ".join(value.split()) if value is not None else None
+
+
+class VocabularyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    word: str
+    meaning: str
+    example: str | None
+    status: Literal["new", "learning", "mastered"]
+    review_count: int
+    analysis_id: str | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class VocabularyListResponse(BaseModel):
+    items: list[VocabularyResponse]
+    total: int
+
+
+class WordPhoneticResponse(BaseModel):
+    text: str | None = Field(default=None, max_length=120)
+    audio_url: str | None = Field(default=None, max_length=2048, pattern=r"^https://")
+
+
+class WordMeaningResponse(BaseModel):
+    part_of_speech: str = Field(default="", max_length=80)
+    definitions: list[str] = Field(default_factory=list, max_length=5)
+    examples: list[str] = Field(default_factory=list, max_length=5)
+
+
+class WordLookupResponse(BaseModel):
+    word: str = Field(min_length=1, max_length=120)
+    phonetics: list[WordPhoneticResponse] = Field(default_factory=list, max_length=8)
+    meanings: list[WordMeaningResponse] = Field(default_factory=list, max_length=12)
+    synonyms: list[str] = Field(default_factory=list, max_length=8)
+    antonyms: list[str] = Field(default_factory=list, max_length=8)
+    collocations: list[str] = Field(default_factory=list, max_length=8)
+    cached: bool
 
 
 class MessageResponse(BaseModel):
@@ -141,7 +478,7 @@ class AdminUserListResponse(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     is_active: bool | None = None
-    role: Literal["learner", "admin"] | None = None
+    role: Literal["learner", "teacher", "admin"] | None = None
 
     @model_validator(mode="after")
     def require_change(self):

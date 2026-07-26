@@ -2,13 +2,60 @@ export type AdminUser = {
   id: string;
   email: string;
   display_name: string;
-  role: "learner" | "admin";
+  role: "learner" | "teacher" | "admin";
   level: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string | null;
   last_login_at: string | null;
   analysis_count: number;
+};
+
+export type TeacherClass = {
+  id: string;
+  teacher_id: string;
+  name: string;
+  description: string | null;
+  invite_code: string | null;
+  member_count?: number;
+  created_at: string;
+};
+
+export type ClassMember = {
+  id: string;
+  user_id?: string;
+  learner_id?: string;
+  email: string;
+  display_name: string;
+  level: string | null;
+  joined_at: string;
+};
+
+export type TeacherAssignment = {
+  id: string;
+  class_id: string;
+  title: string;
+  content: string;
+  skill: "reading" | "writing" | "speaking";
+  estimated_minutes: number;
+  due_at: string;
+  created_at: string;
+};
+
+export type AssignmentSubmission = {
+  id: string;
+  assignment_id: string;
+  learner_id: string;
+  learner_name: string;
+  status: string;
+  input_text?: string;
+  analysis?: {
+    result: Record<string, unknown>;
+    score: number | null;
+  } | null;
+  teacher_feedback: string | null;
+  submitted_at: string | null;
+  feedback_at?: string | null;
 };
 
 export type SessionUser = Omit<
@@ -104,6 +151,27 @@ export type ApiConsoleResponse = {
 
 type Page<T> = { items: T[]; total: number };
 
+function apiErrorDetail(body: unknown, status: number): string {
+  if (typeof body !== "object" || body === null || !("detail" in body)) {
+    return `API trả về HTTP ${status}`;
+  }
+  const detail = (body as { detail: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (typeof item === "object" && item !== null && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return null;
+      })
+      .filter((item): item is string => Boolean(item));
+    if (messages.length) return messages.join(" · ");
+  }
+  return `API trả về HTTP ${status}`;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -172,11 +240,7 @@ export class AdminApi {
       ? await response.json()
       : await response.text();
     if (!response.ok) {
-      const detail =
-        typeof body === "object" && body !== null && "detail" in body
-          ? String((body as { detail: unknown }).detail)
-          : `API trả về HTTP ${response.status}`;
-      throw new ApiError(detail, response.status, body);
+      throw new ApiError(apiErrorDetail(body, response.status), response.status, body);
     }
     return body as T;
   }
@@ -284,6 +348,61 @@ export class AdminApi {
       method: "PATCH",
       body: JSON.stringify(update),
     });
+  }
+
+  classes() {
+    return this.request<Page<TeacherClass>>("/api/v1/classes");
+  }
+
+  createClass(input: { name: string; description?: string }) {
+    return this.request<TeacherClass>("/api/v1/classes", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  classMembers(classId: string) {
+    return this.request<Page<ClassMember>>(
+      `/api/v1/classes/${encodeURIComponent(classId)}/members`,
+    );
+  }
+
+  classAssignments(classId: string) {
+    return this.request<Page<TeacherAssignment>>(
+      `/api/v1/classes/${encodeURIComponent(classId)}/assignments`,
+    );
+  }
+
+  createAssignment(
+    classId: string,
+    input: {
+      title: string;
+      content: string;
+      skill: "reading" | "writing" | "speaking";
+      estimated_minutes: number;
+      due_at: string;
+    },
+  ) {
+    return this.request<TeacherAssignment>(
+      `/api/v1/classes/${encodeURIComponent(classId)}/assignments`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+
+  assignmentSubmissions(assignmentId: string) {
+    return this.request<Page<AssignmentSubmission>>(
+      `/api/v1/assignments/${encodeURIComponent(assignmentId)}/submissions`,
+    );
+  }
+
+  updateSubmissionFeedback(submissionId: string, teacherFeedback: string) {
+    return this.request<AssignmentSubmission>(
+      `/api/v1/submissions/${encodeURIComponent(submissionId)}/feedback`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ feedback: teacherFeedback }),
+      },
+    );
   }
 
   analyses(filters: {

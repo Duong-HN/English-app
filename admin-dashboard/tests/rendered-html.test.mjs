@@ -33,7 +33,7 @@ test("server-renders the LearnMate administrator login", async () => {
   assert.match(html, /<title>Dashboard \| LearnMate Admin<\/title>/i);
   assert.match(html, /Quản lý lớp học AI bằng dữ liệu thật\./);
   assert.match(html, /Đăng nhập hệ thống/);
-  assert.match(html, /Email quản trị/);
+  assert.match(html, /Email giáo viên hoặc quản trị viên/);
   assert.match(html, /Vào dashboard/);
   assert.match(html, /Đang kiểm tra phiên đăng nhập trước/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/);
@@ -52,9 +52,13 @@ test("removes starter-only code and keeps real backend integration", async () =>
   assert.match(page, /<AdminApp defaultApiBaseUrl=\{defaultApiBaseUrl\}/);
   assert.match(layout, /default: "LearnMate Admin"/);
   assert.match(adminApp, /sessionStorage\.setItem/);
-  assert.match(adminApp, /response\.user\.role !== "admin"/);
+  assert.match(adminApp, /response\.user\.role !== "teacher"/);
+  assert.match(adminApp, /TeacherDashboard/);
+  assert.match(adminApp, /Mã tham gia/);
   assert.match(api, /\/api\/v1\/admin\/stats/);
   assert.match(api, /\/api\/v1\/admin\/learning-paths/);
+  assert.match(api, /\/api\/v1\/classes/);
+  assert.match(api, /\/api\/v1\/assignments/);
   assert.match(api, /Authorization/);
   assert.match(api, /consoleRequest/);
   assert.match(apiConsole, /JWT admin tự động/);

@@ -73,3 +73,101 @@ test("requests learning paths with admin authorization and encoded filters", asy
     globalThis.fetch = originalFetch;
   }
 });
+
+test("teacher API creates a class and sends feedback with bearer authorization", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), method: init?.method ?? "GET", body: init?.body, headers: new Headers(init?.headers) });
+    if (String(input).endsWith("/api/v1/classes")) {
+      return Response.json({
+        id: "class-1",
+        teacher_id: "teacher-1",
+        name: "IELTS Foundation",
+        description: null,
+        invite_code: "ABC123",
+        created_at: "2026-07-22T00:00:00Z",
+      }, { status: 201 });
+    }
+    if (String(input).endsWith("/api/v1/classes/class-1/assignments")) {
+      return Response.json({
+        id: "assignment-1",
+        class_id: "class-1",
+        class_name: "IELTS Foundation",
+        created_by_id: "teacher-1",
+        title: "Write an introduction",
+        skill: "writing",
+        content: "Write 120 words.",
+        estimated_minutes: 20,
+        due_at: "2026-08-01T00:00:00Z",
+        created_at: "2026-07-22T00:00:00Z",
+      }, { status: 201 });
+    }
+    return Response.json({
+      id: "submission-1",
+      assignment_id: "assignment-1",
+      learner_id: "learner-1",
+      status: "reviewed",
+      teacher_feedback: "Bố cục rõ ràng.",
+      submitted_at: "2026-07-22T00:00:00Z",
+    });
+  };
+
+  try {
+    const api = new AdminApi("https://api.example.test", "teacher-jwt");
+    await api.createClass({ name: "IELTS Foundation" });
+    await api.createAssignment("class-1", {
+      title: "Write an introduction",
+      content: "Write 120 words.",
+      skill: "writing",
+      estimated_minutes: 20,
+      due_at: "2026-08-01T00:00:00Z",
+    });
+    await api.updateSubmissionFeedback("submission-1", "Bố cục rõ ràng.");
+
+    assert.equal(requests[0].url, "https://api.example.test/api/v1/classes");
+    assert.equal(requests[0].method, "POST");
+    assert.equal(requests[0].headers.get("Authorization"), "Bearer teacher-jwt");
+    assert.deepEqual(JSON.parse(requests[0].body), { name: "IELTS Foundation" });
+    assert.equal(requests[1].url, "https://api.example.test/api/v1/classes/class-1/assignments");
+    assert.deepEqual(JSON.parse(requests[1].body), {
+      title: "Write an introduction",
+      content: "Write 120 words.",
+      skill: "writing",
+      estimated_minutes: 20,
+      due_at: "2026-08-01T00:00:00Z",
+    });
+    assert.equal(
+      requests[2].url,
+      "https://api.example.test/api/v1/submissions/submission-1/feedback",
+    );
+    assert.equal(requests[2].method, "PATCH");
+    assert.deepEqual(JSON.parse(requests[2].body), { feedback: "Bố cục rõ ràng." });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("turns FastAPI validation details into a readable message", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(
+    { detail: [{ msg: "due_at must be in the future" }] },
+    { status: 422 },
+  );
+
+  try {
+    const api = new AdminApi("https://api.example.test", "teacher-jwt");
+    await assert.rejects(
+      api.createAssignment("class-1", {
+        title: "Expired task",
+        content: "Write a paragraph.",
+        skill: "writing",
+        estimated_minutes: 20,
+        due_at: "2020-01-01T00:00:00Z",
+      }),
+      /due_at must be in the future/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -7,9 +7,13 @@ import {
   AdminLearningPath,
   AdminStats,
   AdminUser,
+  AssignmentSubmission,
   ApiError,
   AuditLog,
+  ClassMember,
   SessionUser,
+  TeacherAssignment,
+  TeacherClass,
   normalizeBaseUrl,
 } from "./lib/api";
 import { ApiConsole } from "./api-console";
@@ -42,9 +46,15 @@ function formatDate(value: string | null, withTime = true) {
   }).format(date);
 }
 
+function minimumLocalDeadline() {
+  const date = new Date(Date.now() + 60_000);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function readableError(error: unknown) {
   if (error instanceof ApiError && error.status === 403) {
-    return "Tài khoản hiện tại không có quyền quản trị.";
+    return "Tài khoản hiện tại không có quyền thực hiện thao tác này.";
   }
   return error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định.";
 }
@@ -72,7 +82,9 @@ export function AdminApp({ defaultApiBaseUrl }: { defaultApiBaseUrl: string }) {
     restoreSession
       .then((user) => {
         if (!user || !token) return;
-        if (user.role !== "admin") throw new Error("Tài khoản không có quyền quản trị.");
+        if (user.role !== "admin" && user.role !== "teacher") {
+          throw new Error("Tài khoản không có quyền truy cập cổng quản lý.");
+        }
         setSession({ token, user, baseUrl: normalizeBaseUrl(savedApi) });
       })
       .catch(() => {
@@ -101,7 +113,9 @@ export function AdminApp({ defaultApiBaseUrl }: { defaultApiBaseUrl: string }) {
       />
     );
   }
-  return <Dashboard session={session} onLogout={logout} />;
+  return session.user.role === "teacher"
+    ? <TeacherDashboard session={session} onLogout={logout} />
+    : <Dashboard session={session} onLogout={logout} />;
 }
 
 function LoginScreen({
@@ -128,8 +142,8 @@ function LoginScreen({
       const normalized = normalizeBaseUrl(baseUrl);
       const api = new AdminApi(normalized);
       const response = await api.login(email.trim(), password);
-      if (response.user.role !== "admin") {
-        throw new Error("Tài khoản đăng nhập là học viên, không phải quản trị viên.");
+      if (response.user.role !== "admin" && response.user.role !== "teacher") {
+        throw new Error("Tài khoản học viên không thể truy cập cổng quản lý.");
       }
       onLogin({
         token: response.access_token,
@@ -177,11 +191,11 @@ function LoginScreen({
           <div>
             <p className="eyebrow blue">Khu vực quản trị</p>
             <h2>Đăng nhập hệ thống</h2>
-            <p className="muted">Chỉ tài khoản có role admin mới được truy cập.</p>
+            <p className="muted">Dành cho tài khoản giáo viên và quản trị viên.</p>
           </div>
 
           <label className="field">
-            <span>Email quản trị</span>
+            <span>Email giáo viên hoặc quản trị viên</span>
             <input
               type="email"
               value={email}
@@ -234,12 +248,315 @@ function LoginScreen({
             {busy ? "Đang xác thực…" : "Vào dashboard"}
           </button>
           <p className="login-footnote">
-            Tài khoản quản trị được cấp bằng CLI backend; đăng ký công khai luôn tạo
-            tài khoản học viên.
+            Đăng ký công khai luôn tạo tài khoản học viên. Quản trị viên có thể cấp
+            quyền giáo viên trong mục quản lý người dùng.
           </p>
         </form>
       </section>
     </main>
+  );
+}
+
+function TeacherDashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
+  const api = useMemo(
+    () => new AdminApi(session.baseUrl, session.token),
+    [session.baseUrl, session.token],
+  );
+  const [classes, setClasses] = useState<TeacherClass[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [members, setMembers] = useState<ClassMember[]>([]);
+  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [classLoading, setClassLoading] = useState(true);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const loadClasses = useCallback(async () => {
+    const response = await api.classes();
+    setClasses(response.items);
+    setSelectedClassId((current) => current ?? response.items[0]?.id ?? null);
+  }, [api]);
+
+  useEffect(() => {
+    let active = true;
+    api.classes()
+      .then((response) => {
+        if (!active) return;
+        setClasses(response.items);
+        setSelectedClassId(response.items[0]?.id ?? null);
+      })
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [api]);
+
+  useEffect(() => {
+    if (!selectedClassId) return;
+    let active = true;
+    Promise.all([
+      api.classMembers(selectedClassId),
+      api.classAssignments(selectedClassId),
+    ])
+      .then(([memberPage, assignmentPage]) => {
+        if (!active) return;
+        setMembers(memberPage.items);
+        setAssignments(assignmentPage.items);
+        setSubmissions([]);
+        setSelectedAssignmentId(assignmentPage.items[0]?.id ?? null);
+        setSubmissionLoading(assignmentPage.items.length > 0);
+      })
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setClassLoading(false));
+    return () => { active = false; };
+  }, [api, selectedClassId]);
+
+  useEffect(() => {
+    if (!selectedAssignmentId) return;
+    let active = true;
+    api.assignmentSubmissions(selectedAssignmentId)
+      .then((response) => active && setSubmissions(response.items))
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setSubmissionLoading(false));
+    return () => { active = false; };
+  }, [api, selectedAssignmentId]);
+
+  const selectedClass = classes.find((item) => item.id === selectedClassId) ?? null;
+  const selectedAssignment = assignments.find((item) => item.id === selectedAssignmentId) ?? null;
+
+  function chooseClass(classId: string) {
+    if (classId === selectedClassId) return;
+    setSelectedClassId(classId);
+    setMembers([]);
+    setAssignments([]);
+    setSelectedAssignmentId(null);
+    setSubmissions([]);
+    setClassLoading(true);
+    setSubmissionLoading(false);
+    setError(null);
+  }
+
+  function chooseAssignment(assignmentId: string) {
+    if (assignmentId === selectedAssignmentId) return;
+    setSelectedAssignmentId(assignmentId);
+    setSubmissions([]);
+    setSubmissionLoading(true);
+    setError(null);
+  }
+
+  async function createClass(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (loading) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get("name") ?? "").trim();
+    const description = String(form.get("description") ?? "").trim();
+    if (!name) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const created = await api.createClass({
+        name,
+        ...(description ? { description } : {}),
+      });
+      formElement.reset();
+      await loadClasses();
+      chooseClass(created.id);
+      setNotice(`Đã tạo lớp ${created.name}.`);
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAssignment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedClassId || classLoading) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const title = String(form.get("title") ?? "").trim();
+    const content = String(form.get("content") ?? "").trim();
+    const skill = String(form.get("skill") ?? "writing") as TeacherAssignment["skill"];
+    const estimatedMinutes = Number(form.get("estimated_minutes") ?? 20);
+    const dueValue = String(form.get("due_at") ?? "").trim();
+    if (!title || !content || !dueValue) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const created = await api.createAssignment(selectedClassId, {
+        title,
+        content,
+        skill,
+        estimated_minutes: estimatedMinutes,
+        due_at: new Date(dueValue).toISOString(),
+      });
+      formElement.reset();
+      const response = await api.classAssignments(selectedClassId);
+      setAssignments(response.items);
+      chooseAssignment(created.id);
+      setNotice(`Đã giao bài “${created.title}”.`);
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveFeedback(submissionId: string, feedback: string) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await api.updateSubmissionFeedback(submissionId, feedback);
+      setSubmissions((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setNotice("Đã lưu nhận xét cho học viên.");
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="teacher-shell">
+      <header className="teacher-topbar">
+        <div className="brand">
+          <span className="brand-mark">LM</span>
+          <span><strong>LearnMate Teacher</strong><small>Không gian lớp học</small></span>
+        </div>
+        <div className="account-menu">
+          <span className="avatar">{initials(session.user.display_name)}</span>
+          <span className="account-copy"><strong>{session.user.display_name}</strong><small>{session.user.email}</small></span>
+          <button type="button" className="ghost-button" onClick={onLogout}>Đăng xuất</button>
+        </div>
+      </header>
+
+      <main className="teacher-content">
+        <section className="section-heading">
+          <div>
+            <p className="eyebrow blue">Teacher workspace</p>
+            <h1>Lớp học của tôi</h1>
+            <p className="muted">Giao bài, theo dõi kết quả AI và phản hồi đúng phạm vi lớp phụ trách.</p>
+          </div>
+          <span className="count-badge">{classes.length} lớp</span>
+        </section>
+
+        {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+        {notice && <div className="inline-alert success-alert" role="status">{notice}</div>}
+
+        <section className="teacher-layout">
+          <aside className="teacher-rail">
+            <form className="panel teacher-form" onSubmit={createClass}>
+              <div className="panel-heading"><div><p className="eyebrow">Lớp mới</p><h3>Tạo lớp học</h3></div></div>
+              <label className="field"><span>Tên lớp</span><input name="name" required minLength={2} placeholder="IELTS Foundation" /></label>
+              <label className="field"><span>Mô tả</span><textarea name="description" rows={3} placeholder="Thông tin ngắn cho học viên" /></label>
+              <button className="primary-button" type="submit" disabled={busy || loading}>Tạo lớp</button>
+            </form>
+
+            <section className="panel class-picker">
+              <div className="panel-heading"><div><p className="eyebrow">Danh sách</p><h3>Chọn lớp</h3></div></div>
+              {loading ? <LoadingState label="Đang tải lớp…" /> : classes.length === 0 ? (
+                <EmptyState message="Chưa có lớp. Hãy tạo lớp đầu tiên." />
+              ) : classes.map((item) => (
+                <button key={item.id} type="button" disabled={busy} aria-pressed={item.id === selectedClassId} className={item.id === selectedClassId ? "active" : ""} onClick={() => chooseClass(item.id)}>
+                  <strong>{item.name}</strong><small>{item.member_count ?? 0} học viên · {item.invite_code ?? "chưa có mã"}</small>
+                </button>
+              ))}
+            </section>
+          </aside>
+
+          <div className="teacher-workspace">
+            {!selectedClass ? <EmptyState message="Chọn hoặc tạo một lớp để bắt đầu." /> : (
+              <>
+                <section className="panel class-hero">
+                  <div><p className="eyebrow blue">Lớp đang chọn</p><h2>{selectedClass.name}</h2><p>{selectedClass.description || "Chưa có mô tả."}</p></div>
+                  <div className="invite-code"><small>Mã tham gia</small><strong>{selectedClass.invite_code ?? "—"}</strong><span>Gửi mã này cho học viên</span></div>
+                </section>
+
+                <section className="teacher-grid">
+                  <article className="panel teacher-list-panel">
+                    <div className="panel-heading"><div><p className="eyebrow">Roster</p><h3>Học viên ({members.length})</h3></div></div>
+                    {classLoading ? <LoadingState label="Đang tải học viên…" /> : members.length === 0 ? <EmptyState message="Chưa có học viên tham gia." /> : (
+                      <div className="teacher-list">{members.map((member) => (
+                        <div key={member.id}>
+                          <span className="mini-avatar">{initials(member.display_name)}</span>
+                          <span><strong>{member.display_name}</strong><small>{member.email}</small></span>
+                          <b>{member.level ?? "—"}</b>
+                        </div>
+                      ))}</div>
+                    )}
+                  </article>
+
+                  <form className="panel teacher-form" onSubmit={createAssignment}>
+                    <div className="panel-heading"><div><p className="eyebrow">Assignment</p><h3>Giao bài mới</h3></div></div>
+                    <label className="field"><span>Tiêu đề</span><input name="title" required minLength={3} placeholder="Viết đoạn giới thiệu bản thân" /></label>
+                    <label className="field"><span>Yêu cầu</span><textarea name="content" rows={4} required placeholder="Nội dung học viên cần thực hiện" /></label>
+                    <div className="teacher-form-row">
+                      <label className="field"><span>Kỹ năng</span><select name="skill" defaultValue="writing"><option value="reading">Reading</option><option value="writing">Writing</option><option value="speaking">Speaking</option></select></label>
+                      <label className="field"><span>Số phút</span><input name="estimated_minutes" type="number" min={5} max={120} defaultValue={20} required /></label>
+                    </div>
+                    <label className="field"><span>Hạn nộp</span><input name="due_at" type="datetime-local" min={minimumLocalDeadline()} required /></label>
+                    <button className="primary-button" type="submit" disabled={busy || classLoading}>Giao bài</button>
+                  </form>
+                </section>
+
+                <section className="panel assignments-panel">
+                  <div className="panel-heading"><div><p className="eyebrow">Class work</p><h3>Bài tập đã giao</h3></div><span className="count-badge">{assignments.length}</span></div>
+                  {classLoading ? <LoadingState label="Đang tải bài tập…" /> : assignments.length === 0 ? <EmptyState message="Chưa có bài tập nào." /> : (
+                    <div className="assignment-tabs">{assignments.map((item) => (
+                      <button type="button" key={item.id} disabled={busy} aria-pressed={item.id === selectedAssignmentId} className={item.id === selectedAssignmentId ? "active" : ""} onClick={() => chooseAssignment(item.id)}>
+                        <span className={`type-badge ${item.skill}`}>{item.skill}</span><strong>{item.title}</strong><small>{item.estimated_minutes} phút · {item.due_at ? `hạn ${formatDate(item.due_at)}` : "không hạn nộp"}</small>
+                      </button>
+                    ))}</div>
+                  )}
+                </section>
+
+                {selectedAssignment && (
+                  <section className="panel submissions-panel">
+                    <div className="panel-heading"><div><p className="eyebrow">Review</p><h3>Bài nộp · {selectedAssignment.title}</h3></div><span className="count-badge">{submissions.length}</span></div>
+                    {submissionLoading ? <LoadingState label="Đang tải bài nộp…" /> : submissions.length === 0 ? <EmptyState message="Chưa có học viên nộp bài." /> : (
+                      <div className="submission-list">{submissions.map((submission) => (
+                        <SubmissionReview key={submission.id} submission={submission} busy={busy} onSave={saveFeedback} />
+                      ))}</div>
+                    )}
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function SubmissionReview({
+  submission,
+  busy,
+  onSave,
+}: {
+  submission: AssignmentSubmission;
+  busy: boolean;
+  onSave: (submissionId: string, feedback: string) => Promise<void>;
+}) {
+  const [feedback, setFeedback] = useState(submission.teacher_feedback ?? "");
+  return (
+    <article className="submission-card">
+      <header>
+        <div><strong>{submission.learner_name}</strong><small>{submission.learner_id}</small></div>
+        <span className="provider-badge">{submission.analysis?.score == null ? submission.status : `${submission.analysis.score}/10`}</span>
+      </header>
+      {submission.input_text && <p>{submission.input_text}</p>}
+      {submission.analysis?.result && <details><summary>Xem phản hồi AI</summary><pre>{JSON.stringify(submission.analysis.result, null, 2)}</pre></details>}
+      <label className="field"><span>Nhận xét của giáo viên</span><textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Điểm tốt và điều cần sửa…" /></label>
+      <button type="button" className="secondary-button" disabled={busy || !feedback.trim()} onClick={() => void onSave(submission.id, feedback.trim())}>Lưu nhận xét</button>
+    </article>
   );
 }
 
@@ -463,7 +780,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
       <section className="section-heading"><div><p className="eyebrow blue">Identity & access</p><h2>Quản lý người dùng</h2><p className="muted">Tìm kiếm, phân quyền và khóa tài khoản ngay tại API.</p></div><span className="count-badge">{data?.total ?? 0} tài khoản</span></section>
       <form className="filter-bar" onSubmit={search}>
         <label className="search-field"><span className="sr-only">Tìm người dùng</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên hoặc email…" /></label>
-        <select aria-label="Lọc vai trò" value={role} onChange={(event) => { setRole(event.target.value); setPage(0); }}><option value="">Mọi vai trò</option><option value="learner">Học viên</option><option value="admin">Quản trị viên</option></select>
+        <select aria-label="Lọc vai trò" value={role} onChange={(event) => { setRole(event.target.value); setPage(0); }}><option value="">Mọi vai trò</option><option value="learner">Học viên</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị viên</option></select>
         <select aria-label="Lọc trạng thái" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Đã khóa</option></select>
         <button className="secondary-button" type="submit">Tìm kiếm</button>
       </form>
@@ -476,7 +793,7 @@ function UsersPage({ api, currentUser }: { api: AdminApi; currentUser: SessionUs
             {data.items.map((user) => (
               <div className="table-row" role="row" key={user.id}>
                 <div className="user-cell"><span className="mini-avatar">{initials(user.display_name)}</span><span><strong>{user.display_name}</strong><small>{user.email}</small></span></div>
-                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => void updateUser(user, { role: event.target.value }, `Đổi vai trò ${user.email} thành ${event.target.value}?`)}><option value="learner">Học viên</option><option value="admin">Admin</option></select></div>
+                <div><select aria-label={`Vai trò của ${user.email}`} value={user.role} disabled={busyId === user.id || user.id === currentUser.id} onChange={(event) => void updateUser(user, { role: event.target.value }, `Đổi vai trò ${user.email} thành ${event.target.value}?`)}><option value="learner">Học viên</option><option value="teacher">Giáo viên</option><option value="admin">Admin</option></select></div>
                 <div><strong>{user.analysis_count}</strong><small className="cell-note"> bài phân tích</small></div>
                 <div className="date-cell">{formatDate(user.last_login_at)}</div>
                 <div><span className={`status-pill ${user.is_active ? "active" : "locked"}`}>{user.is_active ? "Hoạt động" : "Đã khóa"}</span></div>

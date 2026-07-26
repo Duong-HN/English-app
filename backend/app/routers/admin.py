@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_admin
-from ..models import AdminAuditLog, Analysis, LearningPath, User, utc_now
+from ..models import AdminAuditLog, Analysis, Classroom, LearningPath, User, utc_now
 from ..schemas import (
     AdminAnalysisListResponse,
     AdminAnalysisResponse,
@@ -52,6 +52,8 @@ def _analysis_response(analysis: Analysis, user: User) -> AdminAnalysisResponse:
         result=analysis.result,
         score=analysis.score,
         provider=analysis.provider,
+        learning_path_id=analysis.learning_path_id,
+        task_day=analysis.task_day,
         created_at=analysis.created_at,
     )
 
@@ -66,6 +68,9 @@ def _learning_path_response(learning_path: LearningPath, user: User) -> AdminLea
         current_level=learning_path.current_level,
         minutes_per_day=learning_path.minutes_per_day,
         plan=learning_path.plan,
+        daily_progress=learning_path.daily_progress,
+        level_source=learning_path.level_source,
+        placement_attempt_id=learning_path.placement_attempt_id,
         provider=learning_path.provider,
         created_at=learning_path.created_at,
     )
@@ -92,7 +97,9 @@ def _record_audit(
 
 
 def _ensure_another_active_admin(db: Session, target: User, update: AdminUserUpdate) -> None:
-    removes_admin_access = target.role == "admin" and (update.role == "learner" or update.is_active is False)
+    removes_admin_access = target.role == "admin" and (
+        (update.role is not None and update.role != "admin") or update.is_active is False
+    )
     if not removes_admin_access:
         return
     active_admins = (
@@ -105,6 +112,22 @@ def _ensure_another_active_admin(db: Session, target: User, update: AdminUserUpd
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="The last active administrator cannot be disabled or demoted",
+        )
+
+
+def _ensure_teacher_has_no_owned_classes(db: Session, target: User, update: AdminUserUpdate) -> None:
+    removes_teacher_access = target.role == "teacher" and (
+        (update.role is not None and update.role != "teacher") or update.is_active is False
+    )
+    if not removes_teacher_access:
+        return
+    owned_classes = (
+        db.scalar(select(func.count()).select_from(Classroom).where(Classroom.teacher_id == target.id)) or 0
+    )
+    if owned_classes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Transfer or remove the teacher's classes before changing teacher access",
         )
 
 
@@ -164,7 +187,7 @@ def stats(
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     q: str | None = Query(default=None, max_length=120),
-    role: str | None = Query(default=None, pattern="^(learner|admin)$"),
+    role: str | None = Query(default=None, pattern="^(learner|teacher|admin)$"),
     is_active: bool | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -218,6 +241,7 @@ def update_user(
             detail="Administrators cannot remove their own access",
         )
     _ensure_another_active_admin(db, target, update)
+    _ensure_teacher_has_no_owned_classes(db, target, update)
 
     changes: dict[str, dict[str, str | bool]] = {}
     if update.is_active is not None and update.is_active != target.is_active:
