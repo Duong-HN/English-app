@@ -64,6 +64,15 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 
 def require_learner(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {"learner", "teacher"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Learner or teacher access is required",
+        )
+    return user
+
+
+def require_learner_only(user: User = Depends(get_current_user)) -> User:
     if user.role != "learner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

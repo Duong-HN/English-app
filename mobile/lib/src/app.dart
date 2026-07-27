@@ -6,6 +6,7 @@ import 'core/token_store.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
 import 'features/onboarding/onboarding_page.dart';
+import 'features/teacher/teacher_mode_page.dart';
 
 class LearnMateApp extends StatefulWidget {
   const LearnMateApp({super.key, this.apiClient, this.tokenStore});
@@ -63,7 +64,14 @@ class _LearnMateAppState extends State<LearnMateApp> {
             return AuthPage(controller: _authController);
           }
           final role = _authController.user?['role']?.toString().toLowerCase();
-          if (role != null && role.isNotEmpty && role != 'learner') {
+          if (role == 'teacher' &&
+              _authController.activeMode == AuthController.teacherMode) {
+            return TeacherModePage(authController: _authController);
+          }
+          if (role != null &&
+              role.isNotEmpty &&
+              role != 'learner' &&
+              role != 'teacher') {
             return _NonLearnerPage(role: role, authController: _authController);
           }
           return _LearnerEntry(authController: _authController);

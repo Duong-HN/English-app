@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..dependencies import get_current_user, require_learner
+from ..dependencies import get_current_user, require_learner_only
 from ..models import TeacherApplication, User, utc_now
 from ..schemas import (
     TeacherApplicationCreate,
@@ -31,7 +31,7 @@ def my_teacher_application(
 def submit_teacher_application(
     request: TeacherApplicationCreate,
     db: Session = Depends(get_db),
-    learner: User = Depends(require_learner),
+    learner: User = Depends(require_learner_only),
 ):
     application = db.scalar(select(TeacherApplication).where(TeacherApplication.user_id == learner.id))
     if application is not None and application.status != "rejected":

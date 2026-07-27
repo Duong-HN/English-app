@@ -6,7 +6,9 @@ import '../../core/auth_controller.dart';
 import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
 import '../classes/classes_page.dart';
-import '../teacher/teacher_application_page.dart';
+import '../settings/notifications_page.dart';
+import '../settings/settings_page.dart';
+import '../shared/learnmate_top_bar.dart';
 import '../vocabulary/vocabulary_detail_page.dart';
 import 'dashboard_page.dart';
 
@@ -94,38 +96,89 @@ class _HomePageState extends State<HomePage> {
     if (mounted) _dashboardKey.currentState?.refresh();
   }
 
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsPage(authController: widget.authController),
+      ),
+    );
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationsPage(apiClient: widget.apiClient),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    const titles = ['Tổng quan', 'Học tập', 'Lớp học', 'Lịch sử', 'Hồ sơ'];
     return Scaffold(
+      appBar: LearnMateTopBar(
+        authController: widget.authController,
+        title: titles[_selectedIndex],
+        onSettings: _openSettings,
+        onNotifications: _openNotifications,
+      ),
       body: SafeArea(
         child: IndexedStack(index: _selectedIndex, children: _pages),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _selectPage,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Home',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A0F172A),
+                blurRadius: 24,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(Icons.school),
-            label: 'Học',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: NavigationBar(
+              height: 72,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              indicatorColor: Theme.of(context).colorScheme.primaryContainer,
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: _selectPage,
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.school_outlined),
+                  selectedIcon: Icon(Icons.school_rounded),
+                  label: 'Học',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.groups_outlined),
+                  selectedIcon: Icon(Icons.groups_rounded),
+                  label: 'Lớp',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.history_outlined),
+                  selectedIcon: Icon(Icons.history_rounded),
+                  label: 'Lịch sử',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'Hồ sơ',
+                ),
+              ],
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.groups_outlined),
-            selectedIcon: Icon(Icons.groups),
-            label: 'Lớp',
-          ),
-          NavigationDestination(icon: Icon(Icons.history), label: 'Lịch sử'),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Hồ sơ',
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1515,16 +1568,14 @@ class _ProfilePage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        OutlinedButton.icon(
-          key: const Key('open-teacher-application'),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) =>
-                  TeacherApplicationPage(apiClient: authController.apiClient),
+        const Card(
+          child: ListTile(
+            leading: Icon(Icons.settings_outlined),
+            title: Text('Tùy chỉnh tài khoản'),
+            subtitle: Text(
+              'Mở Cài đặt ở góc trên bên trái để đổi chế độ hoặc đăng ký giáo viên.',
             ),
           ),
-          icon: const Icon(Icons.school_outlined),
-          label: const Text('Đăng ký làm giáo viên'),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

@@ -82,12 +82,23 @@ def test_admin_can_promote_and_filter_teacher_role(client, db_session):
         "/api/v1/placement-test/latest",
         headers=auth_header(teacher["access_token"]),
     )
+    teacher_home = client.get(
+        "/api/v1/home",
+        headers=auth_header(teacher["access_token"]),
+    )
+    teacher_placement_submit = client.post(
+        "/api/v1/placement-test/submit",
+        headers=auth_header(teacher["access_token"]),
+        json={"answers": {f"q{index}": "a" for index in range(1, 21)}},
+    )
     admin_placement = client.post(
         "/api/v1/placement-test/submit",
         headers=headers,
         json={"answers": {f"q{index}": "a" for index in range(1, 21)}},
     )
-    assert teacher_placement.status_code == 403
+    assert teacher_placement.status_code == 404
+    assert teacher_home.status_code == 200
+    assert teacher_placement_submit.status_code == 201
     assert admin_placement.status_code == 403
 
     deactivated = client.patch(

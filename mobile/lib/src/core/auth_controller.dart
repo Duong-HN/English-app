@@ -6,6 +6,9 @@ import 'token_store.dart';
 class AuthController extends ChangeNotifier {
   AuthController({required this.apiClient, required this.tokenStore});
 
+  static const learnerMode = 'learner';
+  static const teacherMode = 'teacher';
+
   final ApiClient apiClient;
   final TokenStore tokenStore;
 
@@ -13,8 +16,19 @@ class AuthController extends ChangeNotifier {
   bool initialized = false;
   bool loading = false;
   String? error;
+  String activeMode = learnerMode;
 
   bool get isAuthenticated => user != null && apiClient.accessToken != null;
+  bool get canUseTeacherMode =>
+      user?['role']?.toString().toLowerCase() == teacherMode;
+
+  void setActiveMode(String mode) {
+    if (mode == teacherMode && !canUseTeacherMode) return;
+    if (mode != learnerMode && mode != teacherMode) return;
+    if (activeMode == mode) return;
+    activeMode = mode;
+    notifyListeners();
+  }
 
   Future<void> initialize() async {
     final token = await tokenStore.read();
@@ -22,6 +36,7 @@ class AuthController extends ChangeNotifier {
       apiClient.accessToken = token;
       try {
         user = await apiClient.profile();
+        if (!canUseTeacherMode) activeMode = learnerMode;
       } on ApiException catch (exception) {
         if (exception.statusCode == 401) {
           await tokenStore.clear();
@@ -69,6 +84,7 @@ class AuthController extends ChangeNotifier {
       final token = session['access_token'] as String;
       apiClient.accessToken = token;
       user = session['user'] as Map<String, dynamic>;
+      activeMode = learnerMode;
       await tokenStore.write(token);
       return true;
     } on ApiException catch (exception) {
@@ -86,6 +102,7 @@ class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     user = null;
     apiClient.accessToken = null;
+    activeMode = learnerMode;
     error = null;
     await tokenStore.clear();
     notifyListeners();

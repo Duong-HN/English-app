@@ -57,10 +57,10 @@ API -> Database: placement result + skill scores
 Learner -> API: complete onboarding
 API -> AI/Database: validate and persist one seven-day personal path
 Teacher -> API: class + assignment + deadline
-Learner -> API: invite code, then assignment submission
+Learner or approved teacher -> API: learner profile, invite code, personal study and assignment submission
 API -> AI/Database: structured analysis + idempotent submission
 Teacher -> API: review submission and save feedback
-API -> Learner: home blend of class work and personal path
+API -> Learner or approved teacher: home blend of class work and personal path
 ```
 
 Administrator flow:

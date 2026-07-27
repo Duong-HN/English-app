@@ -2,7 +2,7 @@ import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -182,7 +182,11 @@ def list_classes(
 ):
     statement = select(Classroom, User).join(User, User.id == Classroom.teacher_id)
     if user.role == "teacher":
-        statement = statement.where(Classroom.teacher_id == user.id)
+        statement = (
+            statement.outerjoin(ClassMember, ClassMember.class_id == Classroom.id)
+            .where(or_(Classroom.teacher_id == user.id, ClassMember.learner_id == user.id))
+            .distinct()
+        )
     elif user.role == "learner":
         statement = statement.join(
             ClassMember,
@@ -306,7 +310,15 @@ def list_assignments(
         .order_by(Assignment.due_at, Assignment.created_at)
     ).all()
     submissions: dict[str, AssignmentSubmission] = {}
-    if user.role == "learner":
+    membership = None
+    if user.role in {"learner", "teacher"}:
+        membership = db.scalar(
+            select(ClassMember.id).where(
+                ClassMember.class_id == classroom.id,
+                ClassMember.learner_id == user.id,
+            )
+        )
+    if membership is not None:
         submissions = {
             submission.assignment_id: submission
             for submission in db.scalars(

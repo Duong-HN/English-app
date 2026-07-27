@@ -92,7 +92,7 @@ npm install
 npm run dev
 ```
 
-Public registration creates learners. A learner can submit a teacher application from the mobile profile; an administrator reviews it in the Hồ sơ giáo viên section. Approved accounts then use the same web portal to create classes, share invite codes, assign work and review submissions.
+Public registration creates learners. A learner can submit a teacher application from mobile Cài đặt; an administrator reviews it in the Hồ sơ giáo viên section. Approved accounts keep the same data and can switch between learner and teacher mode from Cài đặt: the mobile app remains the learner space while the web portal creates classes, shares invite codes, assigns work and reviews submissions.
 
 Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
 

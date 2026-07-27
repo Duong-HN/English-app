@@ -206,7 +206,10 @@ void main() {
 
     expect(analysisBodies.single['learning_path_id'], 'path-1');
     expect(analysisBodies.single['task_day'], 3);
-    expect(find.text('Đã ghi nhận tiến độ'), findsOneWidget);
+    expect(
+      find.text('Đã ghi nhận tiến độ', skipOffstage: false),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
@@ -332,6 +335,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(
+      find.byKey(const Key('home-dashboard')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('open-learning-path')));
     await tester.tap(find.byKey(const Key('open-learning-path')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('generate-learning-path')));
@@ -389,6 +398,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(
+      find.byKey(const Key('home-dashboard')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('open-learning-path')));
     await tester.tap(find.byKey(const Key('open-learning-path')));
     await tester.pumpAndSettle();
 

@@ -192,7 +192,7 @@ def get_learning_path(user_id: str) -> dict[str, Any]:
     """Return the learner's latest complete learning plan and recorded daily progress."""
     with SessionLocal() as db:
         learner = db.get(User, user_id)
-        if learner is None or learner.role != "learner":
+        if learner is None or learner.role not in {"learner", "teacher"}:
             raise ValueError("Learner not found")
         learning_path = _latest_learning_path(db, user_id)
         if learning_path is None:
@@ -213,7 +213,7 @@ def get_learner_progress(user_id: str) -> dict[str, Any]:
     now = utc_now()
     with SessionLocal() as db:
         learner = db.get(User, user_id)
-        if learner is None or learner.role != "learner":
+        if learner is None or learner.role not in {"learner", "teacher"}:
             raise ValueError("Learner not found")
 
         profile = db.get(LearnerProfile, user_id)

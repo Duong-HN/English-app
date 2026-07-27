@@ -41,4 +41,54 @@ void main() {
     expect(controller.user?['email'], 'learner@example.com');
     controller.dispose();
   });
+
+  test('teacher can switch between learner and teacher modes', () {
+    final controller =
+        AuthController(
+            apiClient: ApiClient(
+              baseUrl: 'https://api.example.test',
+              client: MockClient((_) async => http.Response('{}', 200)),
+            ),
+            tokenStore: MemoryTokenStore(),
+          )
+          ..user = {
+            'id': 'teacher-1',
+            'email': 'teacher@example.com',
+            'display_name': 'Teacher',
+            'role': 'teacher',
+          };
+
+    expect(controller.activeMode, AuthController.learnerMode);
+    expect(controller.canUseTeacherMode, isTrue);
+
+    controller.setActiveMode(AuthController.teacherMode);
+    expect(controller.activeMode, AuthController.teacherMode);
+
+    controller.setActiveMode(AuthController.learnerMode);
+    expect(controller.activeMode, AuthController.learnerMode);
+    controller.dispose();
+  });
+
+  test('learner cannot activate teacher mode without approval', () {
+    final controller =
+        AuthController(
+            apiClient: ApiClient(
+              baseUrl: 'https://api.example.test',
+              client: MockClient((_) async => http.Response('{}', 200)),
+            ),
+            tokenStore: MemoryTokenStore(),
+          )
+          ..user = {
+            'id': 'learner-1',
+            'email': 'learner@example.com',
+            'display_name': 'Learner',
+            'role': 'learner',
+          };
+
+    controller.setActiveMode(AuthController.teacherMode);
+
+    expect(controller.activeMode, AuthController.learnerMode);
+    expect(controller.canUseTeacherMode, isFalse);
+    controller.dispose();
+  });
 }

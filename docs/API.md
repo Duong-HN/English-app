@@ -107,13 +107,13 @@ failures do not overwrite it.
 ## Teacher classes and assignments
 
 Roles are separate: public registration creates `learner`; a learner can submit a teacher application; an
-administrator must approve it before the account becomes `teacher`. Administrator access is not implied by the
-teacher role.
+administrator must approve it before the account becomes `teacher`. Approved teachers retain access to the learner
+endpoints and may use the same account as a learner; administrator access is not implied by the teacher role.
 
 ### Teacher applications
 
 - `GET /teacher-applications/me` — learner reads their current application, or `{"application": null}` when none exists.
-- `POST /teacher-applications` — learner submits a motivation and optional organization. A rejected application can be resubmitted.
+- `POST /teacher-applications` — learner-only endpoint for submitting a motivation and optional organization. A rejected application can be resubmitted; an approved teacher cannot submit a second application.
 - `GET /admin/teacher-applications?status=pending|approved|rejected&limit=&offset=` — administrator reviews applications.
 - `PATCH /admin/teacher-applications/{id}` — administrator approves or rejects a pending application and can add a review note.
 
