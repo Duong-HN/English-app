@@ -33,7 +33,9 @@ a fixed schema and persisted in `learning_paths`. Joined classes receive their o
 analyses and progress never feed back into self-study or another class. The pedagogical loop also includes a
 20-question placement diagnostic, fixed level/chapter curriculum, IELTS band course metadata, resumable onboarding,
 daily progress, vocabulary flashcards, teacher-owned classes and AI-analyzed assignments. Run Alembic before starting
-the API so revision `0008` is applied.
+the API so revision `0009` is applied. Lesson audio/video binaries are kept outside the database under
+`MEDIA_STORAGE_DIR`; use the administrator's curriculum media screen to upload owned/licensed assets or register an
+HTTPS CDN URL. `MEDIA_MAX_SIZE_MB` defaults to 100.
 
 ## Create the first administrator
 

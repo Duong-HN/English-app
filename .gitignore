@@ -48,6 +48,7 @@ app.*.map.json
 backend/.env
 backend/.venv/
 backend/*.db
+backend/media/
 backend/__pycache__/
 backend/app/__pycache__/
 backend/tests/__pycache__/

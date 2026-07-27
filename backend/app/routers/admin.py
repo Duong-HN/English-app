@@ -63,6 +63,7 @@ def _analysis_response(analysis: Analysis, user: User) -> AdminAnalysisResponse:
         result=analysis.result,
         score=analysis.score,
         provider=analysis.provider,
+        lesson_id=analysis.lesson_id,
         learning_path_id=analysis.learning_path_id,
         task_day=analysis.task_day,
         created_at=analysis.created_at,

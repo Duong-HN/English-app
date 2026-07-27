@@ -23,9 +23,14 @@ Analysis request:
 {
   "input_text": "The learner's English text",
   "learning_path_id": "optional-path-id",
-  "task_day": 3
+  "task_day": 3,
+  "lesson_id": "optional-lesson-id"
 }
 ```
+
+When `lesson_id` is supplied from a self-study space, the API grounds the AI request with the course, level, unit,
+lesson objective/body and published audio/video transcripts. The persisted analysis keeps `lesson_id` so feedback can
+be traced back to the lesson. Class-space analyses cannot attach personal curriculum context.
 
 Speaking input is currently a transcript. The API prompt explicitly excludes pronunciation claims; a real pronunciation
 score requires a separately configured audio assessment provider and is not synthesized from transcript confidence.
@@ -121,12 +126,26 @@ failures do not overwrite it.
 
 - `GET /content/courses?kind=core|ielts&level=A1|A2|B1|B2|C1` — list fixed courses and chapters.
 - `GET /content/courses/{code}` — retrieve one course with lesson summaries and active-space progress.
-- `GET /content/lessons/{id}` — retrieve lesson body, transcript, optional media URL and progress.
+- `GET /content/lessons/{id}` — retrieve lesson body, transcript, published media items and progress.
 - `PATCH /content/lessons/{id}/progress` — set `started` or `completed` status, with optional score/note.
+- `PATCH /content/lessons/{id}/media-progress` — save the current media position and completion state.
+- `GET /content/media/{id}/stream` — authenticated stream for a private uploaded asset.
 
 The catalog currently seeds one core course per CEFR level and four IELTS band tracks from 4.5–5.5 through 7.0–8.0.
-The schema supports licensed audio/video through `media_url`; the development catalog includes text/transcripts until
-production media assets are supplied.
+Each lesson can contain multiple `LessonMedia` rows. The API supports local multipart uploads and already-hosted
+licensed URLs:
+
+- `GET /content/admin/courses` — administrator-only catalog for media management.
+- `GET /content/admin/lessons/{id}` — administrator-only lesson detail including draft media.
+- `POST /content/admin/lessons/{id}/media` — administrator-only multipart upload with `file`, `media_type`, `title`,
+  optional `duration_seconds`, `transcript`, `caption_url`, `sort_order` and `is_published` fields.
+- `POST /content/admin/lessons/{id}/media/url` — administrator-only registration of an HTTPS audio/video URL.
+- `DELETE /content/admin/media/{id}` — remove the database metadata and private uploaded file.
+
+Uploaded files are stored outside the database under `MEDIA_STORAGE_DIR` and streamed only to authenticated users.
+Docker mounts `/data/media` as the `learnmate_media` persistent volume. The repository does not ship copyrighted lesson
+assets; an administrator must upload owned/licensed recordings or register a licensed CDN URL. `media_url` remains in
+the response as a backwards-compatible alias for the first published media item.
 
 ## Teacher classes and assignments
 

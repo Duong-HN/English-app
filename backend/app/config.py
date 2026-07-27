@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     ai_timeout_seconds: float = 45
 
+    media_storage_dir: str = "./media"
+    media_max_size_mb: int = 100
+    media_public_base_url: str | None = None
+
     allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
     )
