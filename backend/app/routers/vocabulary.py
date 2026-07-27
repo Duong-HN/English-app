@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Analysis, User, VocabularyItem, utc_now
+from ..learning_spaces import get_learning_space
+from ..models import Analysis, LearningSpace, User, VocabularyItem, utc_now
 from ..schemas import (
     VocabularyCreateRequest,
     VocabularyListResponse,
@@ -15,16 +16,31 @@ from ..schemas import (
 router = APIRouter(prefix="/vocabulary", tags=["vocabulary"])
 
 
-def _find_item(db: Session, user_id: str, item_id: str) -> VocabularyItem | None:
+def _find_item(db: Session, user_id: str, space_id: str, item_id: str) -> VocabularyItem | None:
     return db.scalar(
-        select(VocabularyItem).where(VocabularyItem.id == item_id, VocabularyItem.user_id == user_id)
+        select(VocabularyItem).where(
+            VocabularyItem.id == item_id,
+            VocabularyItem.user_id == user_id,
+            VocabularyItem.space_id == space_id,
+        )
     )
 
 
-def _validate_analysis(db: Session, user: User, analysis_id: str | None) -> Analysis | None:
+def _validate_analysis(
+    db: Session,
+    user: User,
+    space: LearningSpace,
+    analysis_id: str | None,
+) -> Analysis | None:
     if analysis_id is None:
         return None
-    analysis = db.scalar(select(Analysis).where(Analysis.id == analysis_id, Analysis.user_id == user.id))
+    analysis = db.scalar(
+        select(Analysis).where(
+            Analysis.id == analysis_id,
+            Analysis.user_id == user.id,
+            Analysis.space_id == space.id,
+        )
+    )
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     return analysis
@@ -46,6 +62,7 @@ def upsert_analysis_vocabulary(
         item = db.scalar(
             select(VocabularyItem).where(
                 VocabularyItem.user_id == user.id,
+                VocabularyItem.space_id == analysis.space_id,
                 func.lower(VocabularyItem.word) == word.lower(),
             )
         )
@@ -53,6 +70,7 @@ def upsert_analysis_vocabulary(
             db.add(
                 VocabularyItem(
                     user_id=user.id,
+                    space_id=analysis.space_id,
                     analysis_id=analysis.id,
                     word=word,
                     meaning=meaning,
@@ -75,8 +93,9 @@ def list_vocabulary(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    filters = [VocabularyItem.user_id == user.id]
+    filters = [VocabularyItem.user_id == user.id, VocabularyItem.space_id == space.id]
     if item_status:
         filters.append(VocabularyItem.status == item_status)
     total = db.scalar(select(func.count()).select_from(VocabularyItem).where(*filters)) or 0
@@ -98,18 +117,21 @@ def create_vocabulary(
     request: VocabularyCreateRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    _validate_analysis(db, user, request.analysis_id)
+    _validate_analysis(db, user, space, request.analysis_id)
     word = request.word.strip()
     item = db.scalar(
         select(VocabularyItem).where(
             VocabularyItem.user_id == user.id,
+            VocabularyItem.space_id == space.id,
             func.lower(VocabularyItem.word) == word.lower(),
         )
     )
     if item is None:
         item = VocabularyItem(
             user_id=user.id,
+            space_id=space.id,
             analysis_id=request.analysis_id,
             word=word,
             meaning=request.meaning,
@@ -131,14 +153,19 @@ def save_analysis_vocabulary(
     analysis_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    analysis = _validate_analysis(db, user, analysis_id)
+    analysis = _validate_analysis(db, user, space, analysis_id)
     assert analysis is not None
     upsert_analysis_vocabulary(db, user, analysis)
     db.commit()
     items = db.scalars(
         select(VocabularyItem)
-        .where(VocabularyItem.user_id == user.id, VocabularyItem.analysis_id == analysis.id)
+        .where(
+            VocabularyItem.user_id == user.id,
+            VocabularyItem.space_id == space.id,
+            VocabularyItem.analysis_id == analysis.id,
+        )
         .order_by(VocabularyItem.created_at.desc())
     ).all()
     return VocabularyListResponse(
@@ -153,8 +180,9 @@ def update_vocabulary(
     request: VocabularyUpdateRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    item = _find_item(db, user.id, item_id)
+    item = _find_item(db, user.id, space.id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vocabulary item not found")
     if request.status is not None and request.status != item.status:
@@ -173,8 +201,9 @@ def delete_vocabulary(
     item_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    item = _find_item(db, user.id, item_id)
+    item = _find_item(db, user.id, space.id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vocabulary item not found")
     db.delete(item)

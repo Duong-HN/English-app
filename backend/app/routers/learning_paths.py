@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from ..ai import build_provider
 from ..ai_schemas import LearningPathResult
 from ..config import Settings, get_settings
+from ..content_catalog import recommended_course_code
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Analysis, LearnerProfile, LearningPath, PlacementAttempt, User, utc_now
+from ..learning_spaces import get_learning_space
+from ..models import Analysis, LearnerProfile, LearningPath, LearningSpace, PlacementAttempt, User, utc_now
 from ..schemas import (
     DailyProgressUpdate,
     LearningPathGenerateRequest,
@@ -94,19 +96,22 @@ def _activity_profile(analyses: list[Analysis], now: datetime | None = None) -> 
     }
 
 
-def _recent_profile(db: Session, user_id: str, progress: dict | None = None) -> dict:
+def _recent_profile(db: Session, user_id: str, space_id: str, progress: dict | None = None) -> dict:
     recent = db.scalars(
-        select(Analysis).where(Analysis.user_id == user_id).order_by(Analysis.created_at.desc()).limit(20)
+        select(Analysis)
+        .where(Analysis.user_id == user_id, Analysis.space_id == space_id)
+        .order_by(Analysis.created_at.desc())
+        .limit(20)
     ).all()
     profile = _activity_profile(list(recent))
     profile["daily_progress"] = progress or {}
     return profile
 
 
-def _latest_placement(db: Session, user: User) -> PlacementAttempt | None:
+def _latest_placement(db: Session, user: User, space_id: str) -> PlacementAttempt | None:
     return db.scalar(
         select(PlacementAttempt)
-        .where(PlacementAttempt.user_id == user.id)
+        .where(PlacementAttempt.user_id == user.id, PlacementAttempt.space_id == space_id)
         .order_by(PlacementAttempt.completed_at.desc())
         .limit(1)
     )
@@ -120,16 +125,17 @@ async def create_learning_path_record(
     db: Session,
     user: User,
     *,
+    space: LearningSpace,
     goal: str,
     current_level: str,
     minutes_per_day: int,
     settings: Settings,
 ) -> LearningPath:
     """Build and stage a validated seven-day learning path for a learner."""
-    placement = _latest_placement(db, user)
+    placement = _latest_placement(db, user, space.id)
     effective_level = placement.level if placement else current_level
     level_source = "placement" if placement else "self_reported"
-    recent_profile = _recent_profile(db, user.id)
+    recent_profile = _recent_profile(db, user.id, space.id)
     recent_profile["level_source"] = level_source
     provider = build_provider(settings)
     try:
@@ -147,6 +153,7 @@ async def create_learning_path_record(
 
     learning_path = LearningPath(
         user_id=user.id,
+        space_id=space.id,
         goal=goal,
         current_level=effective_level,
         minutes_per_day=minutes_per_day,
@@ -156,6 +163,11 @@ async def create_learning_path_record(
         placement_attempt_id=placement.id if placement else None,
         provider=provider.name,
     )
+    if space.kind == "self":
+        space.mode_selected_at = space.mode_selected_at or utc_now()
+        space.current_level = effective_level
+        space.course_code = recommended_course_code(effective_level, space.goal)
+        space.updated_at = utc_now()
     user.level = effective_level
     user.updated_at = utc_now()
     db.add(learning_path)
@@ -167,8 +179,14 @@ async def generate_learning_path(
     request: LearningPathGenerateRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
     settings: Settings = Depends(get_settings),
 ):
+    if space.kind != "self":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Class spaces use teacher-assigned content",
+        )
     profile = db.get(LearnerProfile, user.id)
     if profile is not None and profile.onboarding_completed_at is None:
         raise HTTPException(
@@ -178,6 +196,7 @@ async def generate_learning_path(
     learning_path = await create_learning_path_record(
         db,
         user,
+        space=space,
         goal=request.goal,
         current_level=request.current_level,
         minutes_per_day=request.minutes_per_day,
@@ -192,10 +211,11 @@ async def generate_learning_path(
 def current_learning_path(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
     learning_path = db.scalar(
         select(LearningPath)
-        .where(LearningPath.user_id == user.id)
+        .where(LearningPath.user_id == user.id, LearningPath.space_id == space.id)
         .order_by(LearningPath.created_at.desc())
         .limit(1)
     )
@@ -210,8 +230,9 @@ def list_learning_paths(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    filters = LearningPath.user_id == user.id
+    filters = (LearningPath.user_id == user.id) & (LearningPath.space_id == space.id)
     total = db.scalar(select(func.count()).select_from(LearningPath).where(filters)) or 0
     rows = db.scalars(
         select(LearningPath)
@@ -233,11 +254,13 @@ def update_daily_progress(
     request: DailyProgressUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
     learning_path = db.scalar(
         select(LearningPath).where(
             LearningPath.id == learning_path_id,
             LearningPath.user_id == user.id,
+            LearningPath.space_id == space.id,
         )
     )
     if learning_path is None:
@@ -267,18 +290,20 @@ async def adapt_learning_path(
     learning_path_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
     settings: Settings = Depends(get_settings),
 ):
     learning_path = db.scalar(
         select(LearningPath).where(
             LearningPath.id == learning_path_id,
             LearningPath.user_id == user.id,
+            LearningPath.space_id == space.id,
         )
     )
     if learning_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learning path not found")
 
-    profile = _recent_profile(db, user.id, learning_path.daily_progress)
+    profile = _recent_profile(db, user.id, space.id, learning_path.daily_progress)
     profile["completed_days"] = [
         int(day)
         for day, details in (learning_path.daily_progress or {}).items()
@@ -307,11 +332,13 @@ def delete_learning_path(
     learning_path_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
     learning_path = db.scalar(
         select(LearningPath).where(
             LearningPath.id == learning_path_id,
             LearningPath.user_id == user.id,
+            LearningPath.space_id == space.id,
         )
     )
     if learning_path is None:

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_learner
+from ..learning_spaces import get_learning_space
 from ..models import (
     Assignment,
     AssignmentSubmission,
@@ -13,6 +14,7 @@ from ..models import (
     Classroom,
     LearnerProfile,
     LearningPath,
+    LearningSpace,
     User,
     utc_now,
 )
@@ -30,10 +32,10 @@ def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def _latest_path(db: Session, user_id: str) -> LearningPath | None:
+def _latest_path(db: Session, user_id: str, space_id: str) -> LearningPath | None:
     return db.scalar(
         select(LearningPath)
-        .where(LearningPath.user_id == user_id)
+        .where(LearningPath.user_id == user_id, LearningPath.space_id == space_id)
         .order_by(LearningPath.created_at.desc())
         .limit(1)
     )
@@ -74,26 +76,30 @@ def _next_personal_task(
 def learner_home(
     db: Session = Depends(get_db),
     learner: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
 ):
     profile = db.get(LearnerProfile, learner.id)
-    learning_path = _latest_path(db, learner.id)
-    rows = db.execute(
-        select(Assignment, Classroom, AssignmentSubmission)
-        .join(ClassMember, ClassMember.class_id == Assignment.class_id)
-        .join(Classroom, Classroom.id == Assignment.class_id)
-        .outerjoin(
-            AssignmentSubmission,
-            and_(
-                AssignmentSubmission.assignment_id == Assignment.id,
-                AssignmentSubmission.learner_id == learner.id,
-            ),
-        )
-        .where(
-            ClassMember.learner_id == learner.id,
-            Assignment.due_at >= utc_now(),
-        )
-        .order_by(Assignment.due_at, Assignment.created_at)
-    ).all()
+    learning_path = _latest_path(db, learner.id, space.id)
+    rows = []
+    if space.kind == "class":
+        rows = db.execute(
+            select(Assignment, Classroom, AssignmentSubmission)
+            .join(ClassMember, ClassMember.class_id == Assignment.class_id)
+            .join(Classroom, Classroom.id == Assignment.class_id)
+            .outerjoin(
+                AssignmentSubmission,
+                and_(
+                    AssignmentSubmission.assignment_id == Assignment.id,
+                    AssignmentSubmission.learner_id == learner.id,
+                ),
+            )
+            .where(
+                ClassMember.learner_id == learner.id,
+                ClassMember.class_id == space.class_id,
+                Assignment.due_at >= utc_now(),
+            )
+            .order_by(Assignment.due_at, Assignment.created_at)
+        ).all()
     class_assignments = [
         HomeClassAssignmentResponse(
             assignment_id=assignment.id,
@@ -114,7 +120,9 @@ def learner_home(
         item.estimated_minutes for item in class_assignments if item.submission_status is None
     )
     daily_minutes = (
-        learning_path.minutes_per_day
+        space.daily_minutes
+        if space.kind == "class" and space.daily_minutes is not None
+        else learning_path.minutes_per_day
         if learning_path is not None
         else profile.daily_minutes
         if profile is not None and profile.daily_minutes is not None
@@ -124,10 +132,18 @@ def learner_home(
     next_personal_task = _next_personal_task(learning_path, remaining_minutes)
     personal_task_minutes = next_personal_task.duration_minutes if next_personal_task else 0
     return HomeResponse(
+        space_id=space.id,
+        space_kind=space.kind,
+        space_name=space.name,
+        course_code=space.course_code,
         goal=(
-            learning_path.goal if learning_path is not None else profile.goal if profile is not None else None
+            learning_path.goal
+            if space.kind == "self" and learning_path is not None
+            else space.goal
+            if space.kind == "self"
+            else None
         ),
-        current_level=learner.level,
+        current_level=space.current_level if space.kind == "class" else learner.level,
         daily_minutes=daily_minutes,
         class_assignment_minutes=outstanding_minutes,
         remaining_personal_minutes=remaining_minutes,

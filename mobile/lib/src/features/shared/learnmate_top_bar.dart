@@ -24,7 +24,9 @@ class LearnMateTopBar extends StatelessWidget implements PreferredSizeWidget {
     final colors = Theme.of(context).colorScheme;
     final mode = authController.activeMode == AuthController.teacherMode
         ? 'Chế độ giáo viên'
-        : 'Không gian học tập';
+        : authController.activeLearningSpaceKind == 'class'
+        ? 'Lớp · ${authController.activeLearningSpaceName}'
+        : 'Tự học · ${authController.activeLearningSpaceName}';
     return AppBar(
       toolbarHeight: 72,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

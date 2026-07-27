@@ -24,12 +24,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Map<String, dynamic>? _placementResult;
   List<Map<String, dynamic>> _questions = const [];
   final Map<String, String> _answers = {};
+  final _inviteController = TextEditingController();
   int _questionIndex = 0;
   bool _loading = true;
   bool _saving = false;
   String? _error;
 
   String get _status => _onboarding?['status']?.toString() ?? 'needs_goal';
+
+  @override
+  void dispose() {
+    _inviteController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -81,6 +88,55 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _onboarding = value;
       if (placement != null) _placementResult = placement;
     });
+    final space = _asMap(value['space']);
+    if (space != null && value['status'] != 'needs_mode') {
+      widget.authController.setActiveLearningSpace(space);
+    }
+  }
+
+  Future<void> _chooseSelfMode() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final response = await widget.apiClient.chooseOnboardingSelfMode();
+      if (!mounted) return;
+      _applyOnboarding(response);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể chọn không gian tự học.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _joinClass() async {
+    final code = _inviteController.text.trim();
+    if (code.length < 6) {
+      setState(() => _error = 'Mã mời cần có ít nhất 6 ký tự.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final space = await widget.apiClient.joinLearningSpace(code);
+      if (!mounted) return;
+      widget.authController.setActiveLearningSpace(space);
+      final onboarding = await widget.apiClient.onboarding();
+      if (!mounted) return;
+      _applyOnboarding(onboarding);
+      widget.onCompleted();
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể tham gia lớp học.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _saveGoal(String goal) async {
@@ -226,6 +282,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
           error: error,
           onSelected: _saveGoal,
         );
+      case 'needs_mode':
+        return _ModeStep(
+          key: const ValueKey('mode-step'),
+          saving: _saving,
+          error: error,
+          inviteController: _inviteController,
+          onSelfStudy: _chooseSelfMode,
+          onJoinClass: _joinClass,
+        );
       case 'needs_daily_time':
         return _MinutesStep(
           key: const ValueKey('minutes-step'),
@@ -300,10 +365,11 @@ class _OnboardingProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = switch (status) {
-      'needs_goal' => 0,
-      'needs_daily_time' => 1,
-      'needs_placement' => 2,
-      _ => 3,
+      'needs_mode' => 0,
+      'needs_goal' => 1,
+      'needs_daily_time' => 2,
+      'needs_placement' => 3,
+      _ => 4,
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
@@ -314,9 +380,15 @@ class _OnboardingProgress extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              for (var index = 0; index < 4; index++)
+              for (var index = 0; index < 5; index++)
                 Text(
-                  ['Mục tiêu', 'Thời gian', 'Kiểm tra', 'Kết quả'][index],
+                  [
+                    'Không gian',
+                    'Mục tiêu',
+                    'Thời gian',
+                    'Kiểm tra',
+                    'Sẵn sàng',
+                  ][index],
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: index <= current
                         ? Theme.of(context).colorScheme.primary
@@ -325,6 +397,86 @@ class _OnboardingProgress extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeStep extends StatelessWidget {
+  const _ModeStep({
+    super.key,
+    required this.saving,
+    required this.error,
+    required this.inviteController,
+    required this.onSelfStudy,
+    required this.onJoinClass,
+  });
+
+  final bool saving;
+  final String? error;
+  final TextEditingController inviteController;
+  final VoidCallback onSelfStudy;
+  final VoidCallback onJoinClass;
+
+  @override
+  Widget build(BuildContext context) {
+    return _StepLayout(
+      title: 'Bạn muốn học theo cách nào?',
+      subtitle:
+          'Bạn có thể đổi giữa Tự học và các lớp đã tham gia trong Cài đặt.',
+      error: error,
+      child: Column(
+        children: [
+          Card(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: ListTile(
+              key: const Key('mode-self-study'),
+              enabled: !saving,
+              onTap: onSelfStudy,
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: const Text('Tự học theo hệ thống'),
+              subtitle: const Text(
+                'Lộ trình theo level, mục tiêu và tiến độ riêng của bạn.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.groups_outlined),
+                    title: Text('Tham gia lớp học có sẵn'),
+                    subtitle: Text('Nhập mã mời giáo viên gửi cho bạn.'),
+                  ),
+                  TextField(
+                    key: const Key('onboarding-class-invite'),
+                    controller: inviteController,
+                    enabled: !saving,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'Mã mời lớp',
+                      hintText: 'Ví dụ: IELTS01',
+                      prefixIcon: Icon(Icons.vpn_key_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    key: const Key('onboarding-join-class'),
+                    onPressed: saving ? null : onJoinClass,
+                    icon: const Icon(Icons.group_add_outlined),
+                    label: Text(saving ? 'Đang tham gia...' : 'Tham gia lớp'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

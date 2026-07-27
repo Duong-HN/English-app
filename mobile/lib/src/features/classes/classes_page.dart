@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/auth_controller.dart';
 
 class ClassesPage extends StatefulWidget {
-  const ClassesPage({super.key, required this.apiClient});
+  const ClassesPage({super.key, required this.apiClient, this.authController});
 
   final ApiClient apiClient;
+  final AuthController? authController;
 
   @override
-  State<ClassesPage> createState() => _ClassesPageState();
+  State<ClassesPage> createState() => ClassesPageState();
 }
 
-class _ClassesPageState extends State<ClassesPage> {
+class ClassesPageState extends State<ClassesPage> {
   final _inviteController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _future;
   bool _joining = false;
@@ -29,7 +31,7 @@ class _ClassesPageState extends State<ClassesPage> {
     super.dispose();
   }
 
-  Future<void> _refresh() async {
+  Future<void> refresh() async {
     final next = widget.apiClient.classes();
     setState(() {
       _future = next;
@@ -48,9 +50,14 @@ class _ClassesPageState extends State<ClassesPage> {
       _joinError = null;
     });
     try {
-      await widget.apiClient.joinClass(code);
+      final joined = await widget.apiClient.joinClass(code);
+      final joinedSpace = _classSpaceFromResponse(joined);
+      if (joinedSpace != null) {
+        widget.authController?.setActiveLearningSpace(joinedSpace);
+        widget.apiClient.learningSpaceId = joinedSpace['id']?.toString();
+      }
       _inviteController.clear();
-      await _refresh();
+      await refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đã tham gia lớp thành công.')),
@@ -67,7 +74,7 @@ class _ClassesPageState extends State<ClassesPage> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: refresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
@@ -140,7 +147,7 @@ class _ClassesPageState extends State<ClassesPage> {
                   message: _errorText(snapshot.error),
                   error: true,
                   actionLabel: 'Tải lại',
-                  onAction: _refresh,
+                  onAction: refresh,
                 );
               }
               final classes = snapshot.data ?? const [];
@@ -155,14 +162,31 @@ class _ClassesPageState extends State<ClassesPage> {
                     .map(
                       (item) => _ClassCard(
                         item: item,
-                        onOpen: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => ClassAssignmentsPage(
-                              apiClient: widget.apiClient,
-                              classData: item,
+                        onOpen: () {
+                          final space = _asMap(item['learning_space']);
+                          if (space != null) {
+                            widget.authController?.setActiveLearningSpace(
+                              space,
+                            );
+                          } else {
+                            final classSpace = _classSpaceFromResponse(item);
+                            if (classSpace != null) {
+                              widget.authController?.setActiveLearningSpace(
+                                classSpace,
+                              );
+                              widget.apiClient.learningSpaceId =
+                                  classSpace['id']?.toString();
+                            }
+                          }
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ClassAssignmentsPage(
+                                apiClient: widget.apiClient,
+                                classData: item,
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     )
                     .toList(),
@@ -682,4 +706,17 @@ String _statusLabel(String value) => switch (value.toLowerCase()) {
 String _errorText(Object? error) {
   if (error is ApiException) return error.message;
   return 'Không thể tải dữ liệu lớp học.';
+}
+
+Map<String, dynamic>? _classSpaceFromResponse(Map<String, dynamic> value) {
+  final nested = _asMap(value['learning_space']);
+  if (nested != null && nested['id'] != null) return nested;
+  final id = value['learning_space_id']?.toString();
+  if (id == null || id.isEmpty) return null;
+  return {
+    'id': id,
+    'kind': 'class',
+    'name': 'Lớp · ${value['name'] ?? 'học tập'}',
+    'class_id': value['id'],
+  };
 }

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import LearnerProfile, User, utc_now
+from ..models import LearnerProfile, LearningSpace, User, utc_now
 from ..schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from ..security import create_access_token, hash_password, verify_password
 
@@ -30,6 +30,12 @@ def register(
         display_name=request.display_name,
     )
     user.learner_profile = LearnerProfile()
+    user.learning_spaces.append(
+        LearningSpace(
+            kind="self",
+            name="Tự học",
+        )
+    )
     db.add(user)
     try:
         db.commit()

@@ -27,7 +27,8 @@ Analysis request:
 }
 ```
 
-Speaking input is a transcript. The API prompt explicitly excludes pronunciation claims.
+Speaking input is currently a transcript. The API prompt explicitly excludes pronunciation claims; a real pronunciation
+score requires a separately configured audio assessment provider and is not synthesized from transcript confidence.
 When `learning_path_id` and `task_day` are supplied, the analysis is attached to that task and marks the day
 complete after a successful analysis.
 
@@ -35,14 +36,26 @@ complete after a successful analysis.
 
 New learner flow is resumable and server-owned:
 
-- `GET /onboarding` — computed state, saved preferences, latest placement result and current learning path.
+- `GET /onboarding` — computed state for the active learning space, saved preferences, latest placement result and current learning path.
+- `PATCH /onboarding/mode` — choose self-study with `{ "kind": "self" }` during first-run onboarding.
 - `PATCH /onboarding/preferences` — save `goal` and/or `daily_minutes`.
 - `POST /onboarding/complete` — idempotently generate the validated seven-day path after preferences and placement exist.
 
 Goal codes are `ielts`, `communication`, `study_abroad` and `work`. Daily time choices are `15`, `20`, `30`,
-`45` and `60`. Computed states are `needs_goal`, `needs_daily_time`, `needs_placement`,
-`needs_learning_path` and `completed`. Existing learners who already own a learning path are safely backfilled and
-reported as completed.
+`45` and `60`. Computed states also include `needs_mode` and `class_ready`; self-study states are
+`needs_goal`, `needs_daily_time`, `needs_placement`, `needs_learning_path` and `completed`. Existing learners who
+already own a learning path are safely backfilled and reported as completed.
+
+### Learning spaces
+
+- `GET /learning-spaces` — list the self-study space and every joined-class space.
+- `POST /learning-spaces/self` — select self-study.
+- `POST /learning-spaces/join` — join a class by invite code and create its isolated space.
+
+Send `X-Learning-Space-ID` on learner requests to select a space. If omitted, the API uses the self-study space. A
+class space has no personal placement/path or self-study curriculum; its home and progress are teacher-assignment
+scoped. Analysis, vocabulary, placement, learning paths and lesson progress always include the active space in their
+ownership filters.
 
 ```json
 {
@@ -104,6 +117,17 @@ External word details use independent shared cache windows (30 days for Dictiona
 If a provider is temporarily unavailable, an expired validated entry is returned as a stale fallback; provider
 failures do not overwrite it.
 
+## Fixed curriculum
+
+- `GET /content/courses?kind=core|ielts&level=A1|A2|B1|B2|C1` — list fixed courses and chapters.
+- `GET /content/courses/{code}` — retrieve one course with lesson summaries and active-space progress.
+- `GET /content/lessons/{id}` — retrieve lesson body, transcript, optional media URL and progress.
+- `PATCH /content/lessons/{id}/progress` — set `started` or `completed` status, with optional score/note.
+
+The catalog currently seeds one core course per CEFR level and four IELTS band tracks from 4.5–5.5 through 7.0–8.0.
+The schema supports licensed audio/video through `media_url`; the development catalog includes text/transcripts until
+production media assets are supplied.
+
 ## Teacher classes and assignments
 
 Roles are separate: public registration creates `learner`; a learner can submit a teacher application; an
@@ -148,11 +172,10 @@ duplicate work. AI output is nested under `analysis`; feedback is submitted as `
 
 ## Learner home
 
-- `GET /home` — combines the current personal path with upcoming joined-class assignments.
+- `GET /home` — returns the active self-study or class space.
 
-The response includes `daily_minutes`, outstanding `class_assignment_minutes`,
-`remaining_personal_minutes`, class submission/feedback state, the full `personal_learning_path`, and
-`next_personal_task`. Class work consumes the daily budget first but never overwrites the personal learning path.
+Self-study responses include the personal path and next task. Class responses include only the selected class's
+upcoming assignments and submission/feedback state; they do not expose or update the personal path.
 
 ## Operations
 

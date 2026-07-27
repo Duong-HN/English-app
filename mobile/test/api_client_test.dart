@@ -294,6 +294,32 @@ void main() {
       expect(response['word'], "can't");
     },
   );
+
+  test('learning space header scopes curriculum requests', () async {
+    late http.Request captured;
+    final client =
+        ApiClient(
+            baseUrl: 'https://api.example.test',
+            client: MockClient((request) async {
+              captured = request;
+              return jsonResponse({
+                'items': [
+                  {'id': 'course-1', 'code': 'ielts-band-5-6'},
+                ],
+              });
+            }),
+          )
+          ..accessToken = 'learner-token'
+          ..learningSpaceId = 'self-space-1';
+
+    final courses = await client.courses(kind: 'ielts');
+
+    expect(captured.url.path, '/api/v1/content/courses');
+    expect(captured.url.queryParameters['kind'], 'ielts');
+    expect(captured.headers['Authorization'], 'Bearer learner-token');
+    expect(captured.headers['X-Learning-Space-ID'], 'self-space-1');
+    expect(courses.single['code'], 'ielts-band-5-6');
+  });
 }
 
 http.Response jsonResponse(Object body, [int status = 200]) => http.Response(

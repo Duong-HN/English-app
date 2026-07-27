@@ -178,7 +178,7 @@ def test_class_join_is_idempotent_and_membership_is_private(client, db_session):
     assert former_owner_detail.status_code == 404
 
 
-def test_assignment_analysis_feedback_deadline_and_home_blend(client, db_session):
+def test_assignment_analysis_feedback_and_space_isolation(client, db_session):
     owner = register(client, "assignment-owner@example.com", "Assignment Teacher")
     other_teacher = register(client, "assignment-other-teacher@example.com", "Other Teacher")
     learner = register(client, "assignment-member@example.com", "Assignment Learner")
@@ -192,6 +192,8 @@ def test_assignment_analysis_feedback_deadline_and_home_blend(client, db_session
         json={"invite_code": classroom["invite_code"]},
     )
     assert joined.status_code == 200
+    class_space_id = joined.json()["learning_space_id"]
+    assert class_space_id
 
     learner_headers = auth_header(learner["access_token"])
     preferences = client.patch(
@@ -253,15 +255,28 @@ def test_assignment_analysis_feedback_deadline_and_home_blend(client, db_session
 
     home = client.get("/api/v1/home", headers=learner_headers)
     assert home.status_code == 200, home.text
+    assert home.json()["space_kind"] == "self"
     assert home.json()["goal"] == "Improve English for work"
     assert home.json()["daily_minutes"] == 30
-    assert home.json()["class_assignment_minutes"] == 15
-    assert home.json()["remaining_personal_minutes"] == 15
-    assert home.json()["next_personal_task"]["duration_minutes"] == 15
+    assert home.json()["class_assignment_minutes"] == 0
+    assert home.json()["remaining_personal_minutes"] == 30
     assert home.json()["total_planned_minutes"] == 30
     assert home.json()["personal_learning_path"]["id"] == path.json()["id"]
-    assert home.json()["class_assignments"][0]["assignment_id"] == assignment["id"]
     assert home.json()["next_personal_task"] is not None
+
+    class_headers = {
+        **learner_headers,
+        "X-Learning-Space-ID": class_space_id,
+    }
+    class_home = client.get("/api/v1/home", headers=class_headers)
+    assert class_home.status_code == 200, class_home.text
+    assert class_home.json()["space_kind"] == "class"
+    assert class_home.json()["goal"] is None
+    assert class_home.json()["class_assignment_minutes"] == 15
+    assert class_home.json()["remaining_personal_minutes"] == 15
+    assert class_home.json()["personal_learning_path"] is None
+    assert class_home.json()["class_assignments"][0]["assignment_id"] == assignment["id"]
+    assert class_home.json()["next_personal_task"] is None
 
     outsider_submit = client.post(
         f"/api/v1/assignments/{assignment['id']}/submit",
@@ -366,10 +381,18 @@ def test_assignment_analysis_feedback_deadline_and_home_blend(client, db_session
     )
     assert late_assignment.status_code == 201
     over_budget_home = client.get("/api/v1/home", headers=learner_headers)
-    assert over_budget_home.json()["class_assignment_minutes"] == 70
-    assert over_budget_home.json()["remaining_personal_minutes"] == 0
-    assert over_budget_home.json()["next_personal_task"] is None
-    assert over_budget_home.json()["total_planned_minutes"] == 70
+    assert over_budget_home.json()["class_assignment_minutes"] == 0
+    assert over_budget_home.json()["remaining_personal_minutes"] == 60
+    assert over_budget_home.json()["next_personal_task"] is not None
+    assert (
+        over_budget_home.json()["total_planned_minutes"]
+        == over_budget_home.json()["next_personal_task"]["duration_minutes"]
+    )
+    over_budget_class_home = client.get("/api/v1/home", headers=class_headers)
+    assert over_budget_class_home.json()["class_assignment_minutes"] == 70
+    assert over_budget_class_home.json()["remaining_personal_minutes"] == 0
+    assert over_budget_class_home.json()["next_personal_task"] is None
+    assert over_budget_class_home.json()["total_planned_minutes"] == 70
     db_session.expire_all()
     persisted_assignment = db_session.get(Assignment, late_assignment.json()["id"])
     assert persisted_assignment is not None

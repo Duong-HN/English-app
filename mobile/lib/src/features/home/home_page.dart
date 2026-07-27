@@ -6,6 +6,7 @@ import '../../core/auth_controller.dart';
 import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
 import '../classes/classes_page.dart';
+import '../content/curriculum_page.dart';
 import '../settings/notifications_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/learnmate_top_bar.dart';
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
   final _studyKey = GlobalKey<_StudyPageState>();
   final _learningPathKey = GlobalKey<_LearningPathPageState>();
   final _historyKey = GlobalKey<_HistoryPageState>();
+  final _classesKey = GlobalKey<ClassesPageState>();
   late final OcrService _ocrService;
   late final SpeechService _speechService;
   late final List<Widget> _pages;
@@ -52,6 +54,7 @@ class _HomePageState extends State<HomePage> {
         displayName:
             widget.authController.user?['display_name']?.toString() ?? 'bạn',
         onOpenLearningPath: _openLearningPath,
+        onOpenCurriculum: _openCurriculum,
         onOpenClasses: () => _selectPage(2),
         onOpenStudy: _openStudyTask,
       ),
@@ -61,7 +64,11 @@ class _HomePageState extends State<HomePage> {
         ocrService: _ocrService,
         speechService: _speechService,
       ),
-      ClassesPage(apiClient: widget.apiClient),
+      ClassesPage(
+        key: _classesKey,
+        apiClient: widget.apiClient,
+        authController: widget.authController,
+      ),
       _HistoryPage(key: _historyKey, apiClient: widget.apiClient),
       _ProfilePage(authController: widget.authController),
     ];
@@ -96,12 +103,26 @@ class _HomePageState extends State<HomePage> {
     if (mounted) _dashboardKey.currentState?.refresh();
   }
 
+  Future<void> _openCurriculum() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CurriculumPage(apiClient: widget.apiClient),
+      ),
+    );
+    if (mounted) _dashboardKey.currentState?.refresh();
+  }
+
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsPage(authController: widget.authController),
       ),
     );
+    if (mounted) {
+      _dashboardKey.currentState?.refresh();
+      _classesKey.currentState?.refresh();
+      setState(() {});
+    }
   }
 
   Future<void> _openNotifications() async {

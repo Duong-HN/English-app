@@ -1,7 +1,7 @@
 # LearnMate API
 
-FastAPI service for authentication, resumable onboarding, structured AI analysis, personalized seven-day learning
-paths, teacher classes and learning history.
+FastAPI service for authentication, resumable onboarding, isolated self/class learning spaces, structured AI analysis,
+fixed curriculum content, personalized seven-day learning paths, teacher classes and learning history.
 
 ## Local commands
 
@@ -28,10 +28,12 @@ python mcp_server.py
 Codex starts this process automatically through the repository's `.codex/config.toml`. See
 [`docs/MCP.md`](../docs/MCP.md) for the available tools, MCP Inspector command, verification, and security boundary.
 
-Learning paths are generated from the authenticated learner's recency-weighted analysis summary, validated against a
-fixed schema and persisted in `learning_paths`. The pedagogical loop also includes a 20-question placement diagnostic,
-resumable onboarding, daily progress, analysis-to-task links, vocabulary flashcards, teacher-owned classes and
-AI-analyzed assignments. Run Alembic before starting the API so revision `0006` is applied.
+Learning paths are generated from the active self-learning space's recency-weighted analysis summary, validated against
+a fixed schema and persisted in `learning_paths`. Joined classes receive their own learning space; class assignments,
+analyses and progress never feed back into self-study or another class. The pedagogical loop also includes a
+20-question placement diagnostic, fixed level/chapter curriculum, IELTS band course metadata, resumable onboarding,
+daily progress, vocabulary flashcards, teacher-owned classes and AI-analyzed assignments. Run Alembic before starting
+the API so revision `0008` is applied.
 
 ## Create the first administrator
 

@@ -48,19 +48,22 @@ API -> Database: validate and persist learner-owned path
 API -> Flutter: focus areas, seven tasks and measurable checkpoints
 ```
 
-Onboarding and class-work flow:
+Onboarding, space switching and class-work flow:
 
 ```text
-Learner -> API: goal code + daily minute budget
+Learner -> API: choose self-study or submit a class invite code
+Learner -> API: X-Learning-Space-ID when switching spaces
+API -> Database: self space or one isolated class space per membership
+Learner -> API: goal code + daily minute budget (self space only)
 Learner -> API: all 20 placement answers
 API -> Database: placement result + skill scores
 Learner -> API: complete onboarding
-API -> AI/Database: validate and persist one seven-day personal path
+API -> AI/Database: validate and persist one seven-day path in self space
 Teacher -> API: class + assignment + deadline
-Learner or approved teacher -> API: learner profile, invite code, personal study and assignment submission
+Learner or approved teacher -> API: assignment submission in the class space
 API -> AI/Database: structured analysis + idempotent submission
 Teacher -> API: review submission and save feedback
-API -> Learner or approved teacher: home blend of class work and personal path
+API -> Learner or approved teacher: home for the selected space only
 ```
 
 Administrator flow:
@@ -82,9 +85,17 @@ API -> Web: operational data or structured API Console response
 
 ### analyses
 
-`id`, `user_id`, `type`, `input_text`, `result`, `score`, `provider`, `created_at`
+`id`, `user_id`, `space_id`, `type`, `input_text`, `result`, `score`, `provider`, `created_at`
 
-`analyses.user_id` is a cascading foreign key. Queries always include the authenticated user ID. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
+`analyses.user_id` and `analyses.space_id` are cascading foreign keys. Queries always include the authenticated user and
+active space. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
+
+### learning spaces and curriculum
+
+`learning_spaces` contains one self-study row per user and one class row per joined class. `learning_paths`,
+`placement_attempts`, `analyses`, `vocabulary_items` and `lesson_progress` carry `space_id`; their unique and query
+boundaries prevent class work from changing self-study level, progress or vocabulary. `courses`, `course_units` and
+`lessons` hold the fixed catalog; `lesson_progress` attaches it to a self-study space.
 
 ### admin_audit_logs
 
@@ -94,7 +105,7 @@ Administrative authorization is enforced by the API. The dashboard is only a cli
 
 ### learning_paths
 
-`id`, `user_id`, `goal`, `current_level`, `minutes_per_day`, `plan`, `provider`, `created_at`
+`id`, `user_id`, `space_id`, `goal`, `current_level`, `minutes_per_day`, `plan`, `provider`, `created_at`
 
 `learning_paths.user_id` cascades on user deletion. The JSON plan is schema-validated before persistence and always contains seven daily tasks. Personalization is derived from aggregate counts, scores and issue titles rather than sending full historical submissions to the provider.
 

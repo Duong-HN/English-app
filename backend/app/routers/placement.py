@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import require_learner
-from ..models import PlacementAttempt, User, utc_now
+from ..learning_spaces import get_learning_space
+from ..models import LearningSpace, PlacementAttempt, User, utc_now
 from ..placement import PLACEMENT_QUESTIONS, PLACEMENT_TEST_VERSION, public_questions, score_answers
 from ..schemas import (
     PlacementResultResponse,
@@ -29,7 +30,10 @@ def submit_placement_test(
     request: PlacementSubmitRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
 ):
+    if space.kind != "self":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Placement belongs to self-study")
     valid_ids = {question.id for question in PLACEMENT_QUESTIONS}
     submitted_ids = set(request.answers)
     invalid_options = {answer for answer in request.answers.values() if answer not in {"a", "b", "c", "d"}}
@@ -41,6 +45,7 @@ def submit_placement_test(
     score, level, skill_scores = score_answers(request.answers)
     attempt = PlacementAttempt(
         user_id=user.id,
+        space_id=space.id,
         score=score,
         total_questions=len(PLACEMENT_QUESTIONS),
         level=level,
@@ -61,10 +66,13 @@ def submit_placement_test(
 def latest_placement_result(
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
 ):
+    if space.kind != "self":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Placement belongs to self-study")
     attempt = db.scalar(
         select(PlacementAttempt)
-        .where(PlacementAttempt.user_id == user.id)
+        .where(PlacementAttempt.user_id == user.id, PlacementAttempt.space_id == space.id)
         .order_by(PlacementAttempt.completed_at.desc())
         .limit(1)
     )

@@ -11,10 +11,12 @@ from .routers import (
     analyses,
     auth,
     classes,
+    content,
     dictionary,
     health,
     home,
     learning_paths,
+    learning_spaces,
     onboarding,
     placement,
     teacher_applications,
@@ -59,9 +61,11 @@ def create_app() -> FastAPI:
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(analyses.router, prefix="/api/v1")
     application.include_router(learning_paths.router, prefix="/api/v1")
+    application.include_router(learning_spaces.router, prefix="/api/v1")
     application.include_router(placement.router, prefix="/api/v1")
     application.include_router(vocabulary.router, prefix="/api/v1")
     application.include_router(dictionary.router, prefix="/api/v1")
+    application.include_router(content.router, prefix="/api/v1")
     application.include_router(onboarding.router, prefix="/api/v1")
     application.include_router(teacher_applications.router, prefix="/api/v1")
     application.include_router(classes.router, prefix="/api/v1")

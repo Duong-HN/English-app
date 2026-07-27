@@ -9,16 +9,20 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 - Email/password registration and JWT login.
 - Secure token storage on the device.
 - Resumable learner onboarding with goal, daily-time preferences and a server-scored 20-question placement test.
-- Home dashboard that blends the personal learning path with deadline-aware class assignments.
+- Onboarding choice between self-study and joining a teacher's class; the active space can be changed in Settings.
+- Strict self/class data isolation for level, placement, path, analysis, vocabulary and lesson progress.
+- Fixed level/chapter curriculum, four IELTS band tracks (4.5–8.0), and a lesson library API with progress tracking.
+- Home dashboard scoped to the active space: self-study shows the personal course/path, class mode shows teacher work.
 - Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
 - Administrator RBAC, account moderation and immutable audit logs.
 - Responsive teacher/administrator web portal for classes, live metrics, moderation and an authenticated API Console.
 - Reading analysis with translation, vocabulary and questions.
 - Writing feedback with issues, score and rewrite.
 - Speaking transcript feedback for relevance, grammar and vocabulary.
-- Personalized seven-day learning paths generated from each learner's recent activity and persisted history.
+- Personalized seven-day learning paths generated from each self-study space's recent activity and persisted history.
 - Camera/gallery OCR on Android and iOS using on-device ML Kit.
-- Device speech-to-text for English transcripts.
+- Device speech-to-text for English transcripts; pronunciation scoring is intentionally not claimed without an audio
+  assessment provider.
 - Per-user persisted analysis and learning-path history with ownership-safe deletion.
 - SQLite development mode and PostgreSQL production support.
 - Alembic database migrations.
@@ -31,7 +35,7 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 ```text
 Flutter mobile                         Teacher/admin web
   ├─ secure auth token                        ├─ operations dashboard
-  ├─ onboarding + personal/class plan         ├─ classes and assignments
+  ├─ onboarding + self/class spaces           ├─ classes and assignments
   ├─ camera -> OCR -> editable text           └─ authenticated API Console
   └─ microphone -> STT transcript                       |
                  |                                      |
@@ -82,7 +86,10 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
 
-On first use, the mobile app resumes the learner at the correct onboarding step, scores all 20 placement questions on the backend and creates a measurable seven-day plan. Home then combines the next personal task with class deadlines. Mock mode is deterministic for local testing; Gemini can generate the same validated structures when enabled.
+On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. Self-study
+then resumes through goal, daily time, placement and path creation; class mode opens teacher-assigned work immediately.
+Settings can switch between self-study and every joined class. The fixed curriculum is separate from the seven-day
+personal task plan. Mock mode is deterministic for local testing; Gemini can generate the same validated structures when enabled.
 
 Teacher/administrator portal:
 

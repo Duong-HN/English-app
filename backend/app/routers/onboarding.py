@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import require_learner
-from ..models import LearnerProfile, LearningPath, PlacementAttempt, User, utc_now
+from ..learning_spaces import ensure_self_space, get_learning_space
+from ..models import LearnerProfile, LearningPath, LearningSpace, PlacementAttempt, User, utc_now
 from ..schemas import (
     LearningPathResponse,
+    LearningSpaceModeUpdate,
     OnboardingPreferencesUpdate,
     OnboardingResponse,
     PlacementResultResponse,
@@ -24,19 +26,19 @@ GOAL_LABELS = {
 }
 
 
-def _latest_placement(db: Session, user_id: str) -> PlacementAttempt | None:
+def _latest_placement(db: Session, user_id: str, space_id: str) -> PlacementAttempt | None:
     return db.scalar(
         select(PlacementAttempt)
-        .where(PlacementAttempt.user_id == user_id)
+        .where(PlacementAttempt.user_id == user_id, PlacementAttempt.space_id == space_id)
         .order_by(PlacementAttempt.completed_at.desc())
         .limit(1)
     )
 
 
-def _latest_path(db: Session, user_id: str) -> LearningPath | None:
+def _latest_path(db: Session, user_id: str, space_id: str) -> LearningPath | None:
     return db.scalar(
         select(LearningPath)
-        .where(LearningPath.user_id == user_id)
+        .where(LearningPath.user_id == user_id, LearningPath.space_id == space_id)
         .order_by(LearningPath.created_at.desc())
         .limit(1)
     )
@@ -76,16 +78,30 @@ def _ensure_profile(db: Session, user: User, learning_path: LearningPath | None)
     return profile
 
 
+def _available_spaces(db: Session, user: User) -> list[LearningSpace]:
+    return db.scalars(
+        select(LearningSpace)
+        .where(LearningSpace.user_id == user.id)
+        .order_by(LearningSpace.kind, LearningSpace.created_at)
+    ).all()
+
+
 def _response(
     profile: LearnerProfile,
     placement: PlacementAttempt | None,
     learning_path: LearningPath | None,
+    space: LearningSpace,
+    available_spaces: list[LearningSpace],
 ) -> OnboardingResponse:
-    if learning_path is not None:
+    if space.kind == "class":
+        onboarding_status = "class_ready"
+    elif space.mode_selected_at is None:
+        onboarding_status = "needs_mode"
+    elif learning_path is not None:
         onboarding_status = "completed"
-    elif not profile.goal:
+    elif not space.goal:
         onboarding_status = "needs_goal"
-    elif profile.daily_minutes is None:
+    elif space.daily_minutes is None:
         onboarding_status = "needs_daily_time"
     elif placement is None:
         onboarding_status = "needs_placement"
@@ -93,10 +109,14 @@ def _response(
         onboarding_status = "needs_learning_path"
     return OnboardingResponse(
         status=onboarding_status,
-        goal=profile.goal,
-        daily_minutes=profile.daily_minutes,
-        onboarding_completed_at=profile.onboarding_completed_at,
-        updated_at=profile.updated_at,
+        space=space,
+        available_spaces=available_spaces,
+        goal=space.goal if space.kind == "self" else None,
+        daily_minutes=space.daily_minutes if space.kind == "self" else None,
+        onboarding_completed_at=(
+            space.mode_selected_at if space.kind == "class" else profile.onboarding_completed_at
+        ),
+        updated_at=space.updated_at or profile.updated_at,
         placement_result=(
             PlacementResultResponse.model_validate(placement) if placement is not None else None
         ),
@@ -110,12 +130,50 @@ def _response(
 def get_onboarding(
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    learning_path = _latest_path(db, user.id)
+    if space.kind == "class":
+        profile = db.get(LearnerProfile, user.id) or LearnerProfile(user_id=user.id)
+        return _response(profile, None, None, space, _available_spaces(db, user))
+    learning_path = _latest_path(db, user.id, space.id)
     profile = _ensure_profile(db, user, learning_path)
+    if space.goal is None and profile.goal is not None:
+        space.goal = profile.goal
+    if space.daily_minutes is None and profile.daily_minutes is not None:
+        space.daily_minutes = profile.daily_minutes
     db.commit()
     db.refresh(profile)
-    return _response(profile, _latest_placement(db, user.id), learning_path)
+    db.refresh(space)
+    return _response(
+        profile,
+        _latest_placement(db, user.id, space.id),
+        learning_path,
+        space,
+        _available_spaces(db, user),
+    )
+
+
+@router.patch("/mode", response_model=OnboardingResponse)
+def choose_self_mode(
+    request: LearningSpaceModeUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_learner),
+):
+    _ = request
+    space = ensure_self_space(db, user)
+    space.mode_selected_at = space.mode_selected_at or utc_now()
+    space.updated_at = utc_now()
+    profile = _ensure_profile(db, user, _latest_path(db, user.id, space.id))
+    db.commit()
+    db.refresh(profile)
+    db.refresh(space)
+    return _response(
+        profile,
+        _latest_placement(db, user.id, space.id),
+        _latest_path(db, user.id, space.id),
+        space,
+        _available_spaces(db, user),
+    )
 
 
 @router.patch("/preferences", response_model=OnboardingResponse)
@@ -123,28 +181,50 @@ def update_preferences(
     request: OnboardingPreferencesUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    learning_path = _latest_path(db, user.id)
+    if space.kind != "self":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Class spaces use teacher-assigned content",
+        )
+    learning_path = _latest_path(db, user.id, space.id)
     profile = _ensure_profile(db, user, learning_path)
+    space.mode_selected_at = space.mode_selected_at or utc_now()
     if "goal" in request.model_fields_set:
         profile.goal = request.goal
+        space.goal = request.goal
     if "daily_minutes" in request.model_fields_set:
         profile.daily_minutes = request.daily_minutes
+        space.daily_minutes = request.daily_minutes
     profile.updated_at = utc_now()
+    space.updated_at = utc_now()
     db.commit()
     db.refresh(profile)
-    return _response(profile, _latest_placement(db, user.id), learning_path)
+    db.refresh(space)
+    return _response(
+        profile,
+        _latest_placement(db, user.id, space.id),
+        learning_path,
+        space,
+        _available_spaces(db, user),
+    )
 
 
 @router.post("/complete", response_model=OnboardingResponse)
 async def complete_onboarding(
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
+    space: LearningSpace = Depends(get_learning_space),
     settings: Settings = Depends(get_settings),
 ):
-    learning_path = _latest_path(db, user.id)
+    if space.kind == "class":
+        profile = db.get(LearnerProfile, user.id) or LearnerProfile(user_id=user.id)
+        return _response(profile, None, None, space, _available_spaces(db, user))
+
+    learning_path = _latest_path(db, user.id, space.id)
     profile = _ensure_profile(db, user, learning_path)
-    placement = _latest_placement(db, user.id)
+    placement = _latest_placement(db, user.id, space.id)
 
     if learning_path is not None:
         if profile.onboarding_completed_at is None:
@@ -152,7 +232,7 @@ async def complete_onboarding(
             profile.updated_at = utc_now()
         db.commit()
         db.refresh(profile)
-        return _response(profile, placement, learning_path)
+        return _response(profile, placement, learning_path, space, _available_spaces(db, user))
     if not profile.goal or profile.daily_minutes is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -167,6 +247,7 @@ async def complete_onboarding(
     learning_path = await create_learning_path_record(
         db,
         user,
+        space=space,
         goal=GOAL_LABELS.get(profile.goal, profile.goal),
         current_level=placement.level,
         minutes_per_day=profile.daily_minutes,
@@ -174,7 +255,13 @@ async def complete_onboarding(
     )
     profile.onboarding_completed_at = utc_now()
     profile.updated_at = utc_now()
+    space.course_code = "ielts-band-5-6" if profile.goal == "ielts" else f"core-{placement.level.lower()}"
+    space.current_level = placement.level
+    space.goal = profile.goal
+    space.daily_minutes = profile.daily_minutes
+    space.updated_at = utc_now()
     db.commit()
     db.refresh(profile)
     db.refresh(learning_path)
-    return _response(profile, placement, learning_path)
+    db.refresh(space)
+    return _response(profile, placement, learning_path, space, _available_spaces(db, user))

@@ -15,12 +15,14 @@ from ..dependencies import (
     require_teacher,
     require_teacher_or_admin,
 )
+from ..learning_spaces import ensure_class_space
 from ..models import (
     Analysis,
     Assignment,
     AssignmentSubmission,
     ClassMember,
     Classroom,
+    LearningSpace,
     User,
     utc_now,
 )
@@ -74,6 +76,13 @@ def _class_response(
     viewer: User,
 ) -> ClassResponse:
     can_manage = viewer.role == "admin" or viewer.role == "teacher" and viewer.id == classroom.teacher_id
+    learning_space = db.scalar(
+        select(LearningSpace.id).where(
+            LearningSpace.user_id == viewer.id,
+            LearningSpace.kind == "class",
+            LearningSpace.class_id == classroom.id,
+        )
+    )
     return ClassResponse(
         id=classroom.id,
         teacher_id=classroom.teacher_id,
@@ -84,6 +93,7 @@ def _class_response(
         member_count=_member_count(db, classroom.id),
         created_at=_as_utc(classroom.created_at),
         updated_at=_as_utc(classroom.updated_at) if classroom.updated_at else None,
+        learning_space_id=learning_space,
     )
 
 
@@ -222,6 +232,8 @@ def join_class(
             db.commit()
         except IntegrityError:
             db.rollback()
+    ensure_class_space(db, learner, classroom)
+    db.commit()
     teacher = db.get(User, classroom.teacher_id)
     assert teacher is not None
     return _class_response(db, classroom, teacher, learner)
@@ -318,6 +330,8 @@ def list_assignments(
                 ClassMember.learner_id == user.id,
             )
         )
+        if membership is not None:
+            ensure_class_space(db, user, classroom)
     if membership is not None:
         submissions = {
             submission.assignment_id: submission
@@ -353,6 +367,7 @@ async def submit_assignment(
     )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    learner_space = ensure_class_space(db, learner, db.get(Classroom, assignment.class_id))
     if utc_now() > _as_utc(assignment.due_at):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assignment deadline has passed")
 
@@ -373,6 +388,7 @@ async def submit_assignment(
     if analysis is None:
         analysis = Analysis(
             user_id=learner.id,
+            space_id=learner_space.id,
             type=assignment.skill,
             input_text=request.input_text,
             result=result,
@@ -433,6 +449,7 @@ def get_own_submission(
     )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    ensure_class_space(db, learner, db.get(Classroom, assignment.class_id))
     submission = db.scalar(
         select(AssignmentSubmission).where(
             AssignmentSubmission.assignment_id == assignment.id,

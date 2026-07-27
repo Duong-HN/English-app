@@ -26,6 +26,7 @@ class ApiClient {
   final http.Client _client;
   final String baseUrl;
   String? accessToken;
+  String? learningSpaceId;
 
   static const _timeout = Duration(seconds: 30);
 
@@ -145,8 +146,67 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> chooseOnboardingSelfMode() {
+    return _patch('/api/v1/onboarding/mode', body: const {'kind': 'self'});
+  }
+
   Future<Map<String, dynamic>> completeOnboarding() {
     return _post('/api/v1/onboarding/complete', body: const {});
+  }
+
+  Future<List<Map<String, dynamic>>> learningSpaces() async {
+    final payload = await _get('/api/v1/learning-spaces');
+    return _mapItems(payload, const ['items', 'spaces', 'data']);
+  }
+
+  Future<Map<String, dynamic>> chooseSelfLearningSpace() {
+    return _post('/api/v1/learning-spaces/self', body: const {'kind': 'self'});
+  }
+
+  Future<Map<String, dynamic>> joinLearningSpace(String inviteCode) {
+    return _post(
+      '/api/v1/learning-spaces/join',
+      body: {'invite_code': inviteCode.trim()},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> courses({
+    String? kind,
+    String? level,
+  }) async {
+    final query = <String, String>{
+      ...?(kind == null ? null : {'kind': kind}),
+      ...?(level == null ? null : {'level': level}),
+    };
+    final suffix = query.isEmpty
+        ? ''
+        : '?${query.entries.map((entry) => '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}').join('&')}';
+    final payload = await _get('/api/v1/content/courses$suffix');
+    return _mapItems(payload, const ['items', 'courses', 'data']);
+  }
+
+  Future<Map<String, dynamic>> course(String code) {
+    return _get('/api/v1/content/courses/${Uri.encodeComponent(code)}');
+  }
+
+  Future<Map<String, dynamic>> lesson(String id) {
+    return _get('/api/v1/content/lessons/${Uri.encodeComponent(id)}');
+  }
+
+  Future<Map<String, dynamic>> updateLessonProgress({
+    required String lessonId,
+    required String status,
+    double? score,
+    String? note,
+  }) {
+    return _patch(
+      '/api/v1/content/lessons/${Uri.encodeComponent(lessonId)}/progress',
+      body: {
+        'status': status,
+        ...?(score == null ? null : {'score': score}),
+        ...?(note == null ? null : {'note': note}),
+      },
+    );
   }
 
   Future<Map<String, dynamic>> teacherApplication() {
@@ -255,6 +315,9 @@ class ApiClient {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (authenticated && accessToken != null) {
       headers['Authorization'] = 'Bearer $accessToken';
+    }
+    if (learningSpaceId != null && learningSpaceId!.isNotEmpty) {
+      headers['X-Learning-Space-ID'] = learningSpaceId!;
     }
     return headers;
   }

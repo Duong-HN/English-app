@@ -71,7 +71,14 @@ def test_onboarding_resumes_and_complete_is_idempotent(client, db_session):
 
     initial = client.get("/api/v1/onboarding", headers=headers)
     assert initial.status_code == 200
-    assert initial.json()["status"] == "needs_goal"
+    assert initial.json()["status"] == "needs_mode"
+    selected_mode = client.patch(
+        "/api/v1/onboarding/mode",
+        headers=headers,
+        json={"kind": "self"},
+    )
+    assert selected_mode.status_code == 200
+    assert selected_mode.json()["status"] == "needs_goal"
 
     goal = client.patch(
         "/api/v1/onboarding/preferences",

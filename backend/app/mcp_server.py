@@ -18,6 +18,7 @@ from .models import (
     Classroom,
     LearnerProfile,
     LearningPath,
+    LearningSpace,
     PlacementAttempt,
     User,
     VocabularyItem,
@@ -59,10 +60,37 @@ def _require_offset(offset: int) -> int:
     return offset
 
 
-def _latest_learning_path(db, user_id: str) -> LearningPath | None:
+def _reporting_space(db, user_id: str, space_id: str | None) -> LearningSpace | None:
+    if space_id:
+        space = db.scalar(
+            select(LearningSpace).where(
+                LearningSpace.id == space_id,
+                LearningSpace.user_id == user_id,
+            )
+        )
+        if space is None:
+            raise ValueError("Learning space not found")
+        return space
+    return db.scalar(
+        select(LearningSpace).where(
+            LearningSpace.user_id == user_id,
+            LearningSpace.kind == "self",
+        )
+    )
+
+
+def _space_filter(column, space: LearningSpace | None):
+    return column == space.id if space is not None else column.is_(None)
+
+
+def _latest_learning_path(
+    db,
+    user_id: str,
+    space: LearningSpace | None,
+) -> LearningPath | None:
     return db.scalar(
         select(LearningPath)
-        .where(LearningPath.user_id == user_id)
+        .where(LearningPath.user_id == user_id, _space_filter(LearningPath.space_id, space))
         .order_by(LearningPath.created_at.desc(), LearningPath.id.desc())
         .limit(1)
     )
@@ -188,13 +216,14 @@ def search_classes(query: str = "", limit: int = 10) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=READ_ONLY, structured_output=True)
-def get_learning_path(user_id: str) -> dict[str, Any]:
+def get_learning_path(user_id: str, space_id: str | None = None) -> dict[str, Any]:
     """Return the learner's latest complete learning plan and recorded daily progress."""
     with SessionLocal() as db:
         learner = db.get(User, user_id)
         if learner is None or learner.role not in {"learner", "teacher"}:
             raise ValueError("Learner not found")
-        learning_path = _latest_learning_path(db, user_id)
+        space = _reporting_space(db, user_id, space_id)
+        learning_path = _latest_learning_path(db, user_id, space)
         if learning_path is None:
             raise ValueError("Learning path not found")
         return {
@@ -203,12 +232,21 @@ def get_learning_path(user_id: str) -> dict[str, Any]:
                 "display_name": learner.display_name,
                 "level": learner.level,
             },
+            "learning_space": (
+                {
+                    "id": space.id,
+                    "kind": space.kind,
+                    "name": space.name,
+                }
+                if space is not None
+                else None
+            ),
             "learning_path": _learning_path_payload(learning_path, include_plan=True),
         }
 
 
 @mcp.tool(annotations=READ_ONLY, structured_output=True)
-def get_learner_progress(user_id: str) -> dict[str, Any]:
+def get_learner_progress(user_id: str, space_id: str | None = None) -> dict[str, Any]:
     """Summarize a learner's profile, placement, path, analyses, vocabulary, and assignments."""
     now = utc_now()
     with SessionLocal() as db:
@@ -216,11 +254,15 @@ def get_learner_progress(user_id: str) -> dict[str, Any]:
         if learner is None or learner.role not in {"learner", "teacher"}:
             raise ValueError("Learner not found")
 
-        profile = db.get(LearnerProfile, user_id)
-        learning_path = _latest_learning_path(db, user_id)
+        space = _reporting_space(db, user_id, space_id)
+        profile = db.get(LearnerProfile, user_id) if space is None or space.kind == "self" else None
+        learning_path = _latest_learning_path(db, user_id, space)
         placement = db.scalar(
             select(PlacementAttempt)
-            .where(PlacementAttempt.user_id == user_id)
+            .where(
+                PlacementAttempt.user_id == user_id,
+                _space_filter(PlacementAttempt.space_id, space),
+            )
             .order_by(PlacementAttempt.completed_at.desc(), PlacementAttempt.id.desc())
             .limit(1)
         )
@@ -231,20 +273,20 @@ def get_learner_progress(user_id: str) -> dict[str, Any]:
                 func.avg(Analysis.score),
                 func.max(Analysis.created_at),
             )
-            .where(Analysis.user_id == user_id)
+            .where(Analysis.user_id == user_id, _space_filter(Analysis.space_id, space))
             .group_by(Analysis.type)
             .order_by(Analysis.type)
         ).all()
         vocabulary_rows = db.execute(
             select(VocabularyItem.status, func.count(VocabularyItem.id))
-            .where(VocabularyItem.user_id == user_id)
+            .where(VocabularyItem.user_id == user_id, _space_filter(VocabularyItem.space_id, space))
             .group_by(VocabularyItem.status)
             .order_by(VocabularyItem.status)
         ).all()
         class_count = (
             db.scalar(select(func.count(ClassMember.id)).where(ClassMember.learner_id == user_id)) or 0
         )
-        assignment_totals = db.execute(
+        assignment_statement = (
             select(
                 func.count(Assignment.id),
                 func.coalesce(
@@ -301,7 +343,10 @@ def get_learner_progress(user_id: str) -> dict[str, Any]:
                     AssignmentSubmission.learner_id == user_id,
                 ),
             )
-        ).one()
+        )
+        if space is not None and space.kind == "class":
+            assignment_statement = assignment_statement.where(Assignment.class_id == space.class_id)
+        assignment_totals = db.execute(assignment_statement).one()
 
         analyses_by_skill = {
             analysis_type: {
@@ -322,6 +367,15 @@ def get_learner_progress(user_id: str) -> dict[str, Any]:
                 "level": learner.level,
                 "is_active": learner.is_active,
             },
+            "learning_space": (
+                {
+                    "id": space.id,
+                    "kind": space.kind,
+                    "name": space.name,
+                }
+                if space is not None
+                else None
+            ),
             "profile": (
                 {
                     "goal": profile.goal,

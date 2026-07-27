@@ -8,11 +8,14 @@ from .ai_schemas import LearningPathResult
 AnalysisType = Literal["reading", "writing", "speaking"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 GoalCode = Literal["ielts", "communication", "study_abroad", "work"]
+LearningSpaceKind = Literal["self", "class"]
 OnboardingStatus = Literal[
+    "needs_mode",
     "needs_goal",
     "needs_daily_time",
     "needs_placement",
     "needs_learning_path",
+    "class_ready",
     "completed",
 ]
 TeacherApplicationStatus = Literal["pending", "approved", "rejected"]
@@ -237,14 +240,120 @@ class OnboardingPreferencesUpdate(BaseModel):
         return self
 
 
+class LearningSpaceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: LearningSpaceKind
+    class_id: str | None
+    name: str
+    goal: str | None
+    daily_minutes: int | None
+    current_level: LearningLevel | None
+    course_code: str | None
+    mode_selected_at: datetime | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class LearningSpaceListResponse(BaseModel):
+    items: list[LearningSpaceResponse]
+    total: int
+
+
+class LearningSpaceModeUpdate(BaseModel):
+    kind: Literal["self"]
+
+
+class LearningSpaceJoinRequest(BaseModel):
+    invite_code: str = Field(min_length=6, max_length=24)
+
+    @field_validator("invite_code")
+    @classmethod
+    def normalize_invite_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
 class OnboardingResponse(BaseModel):
     status: OnboardingStatus
+    space: LearningSpaceResponse
+    available_spaces: list[LearningSpaceResponse]
     goal: str | None
     daily_minutes: int | None
     onboarding_completed_at: datetime | None
     updated_at: datetime | None
     placement_result: PlacementResultResponse | None
     learning_path: LearningPathResponse | None
+
+
+class CourseLessonSummary(BaseModel):
+    id: str
+    lesson_number: int
+    title: str
+    skill: str
+    content_type: str
+    summary: str
+    duration_minutes: int
+    progress_status: str | None = None
+
+
+class CourseUnitResponse(BaseModel):
+    id: str
+    unit_number: int
+    title: str
+    objective: str
+    lessons: list[CourseLessonSummary]
+
+
+class CourseResponse(BaseModel):
+    id: str
+    code: str
+    title: str
+    description: str
+    kind: str
+    level: LearningLevel | None
+    band_min: float | None
+    band_max: float | None
+    units: list[CourseUnitResponse]
+
+
+class CourseListResponse(BaseModel):
+    items: list[CourseResponse]
+    total: int
+
+
+class LessonProgressUpdate(BaseModel):
+    status: Literal["started", "completed"]
+    score: float | None = Field(default=None, ge=0, le=10)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class LessonResponse(BaseModel):
+    id: str
+    course_code: str
+    course_title: str
+    unit_number: int
+    unit_title: str
+    lesson_number: int
+    title: str
+    skill: str
+    content_type: str
+    summary: str
+    body: str
+    transcript: str | None
+    media_url: str | None
+    duration_minutes: int
+    progress_status: str | None
+    progress_score: float | None
+    completed_at: datetime | None
 
 
 class ClassCreateRequest(BaseModel):
@@ -281,6 +390,7 @@ class ClassResponse(BaseModel):
     member_count: int
     created_at: datetime
     updated_at: datetime | None
+    learning_space_id: str | None = None
 
 
 class ClassListResponse(BaseModel):
@@ -417,6 +527,10 @@ class HomePersonalTaskResponse(BaseModel):
 
 
 class HomeResponse(BaseModel):
+    space_id: str
+    space_kind: LearningSpaceKind
+    space_name: str
+    course_code: str | None
     goal: str | None
     current_level: str | None
     daily_minutes: int

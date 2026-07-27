@@ -17,6 +17,9 @@ class AuthController extends ChangeNotifier {
   bool loading = false;
   String? error;
   String activeMode = learnerMode;
+  String? activeLearningSpaceId;
+  String activeLearningSpaceKind = 'self';
+  String activeLearningSpaceName = 'Tự học';
 
   bool get isAuthenticated => user != null && apiClient.accessToken != null;
   bool get canUseTeacherMode =>
@@ -30,12 +33,23 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setActiveLearningSpace(Map<String, dynamic> space) {
+    final id = space['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    activeLearningSpaceId = id;
+    apiClient.learningSpaceId = id;
+    activeLearningSpaceKind = space['kind']?.toString() ?? 'self';
+    activeLearningSpaceName = space['name']?.toString() ?? 'Không gian học tập';
+    notifyListeners();
+  }
+
   Future<void> initialize() async {
     final token = await tokenStore.read();
     if (token != null) {
       apiClient.accessToken = token;
       try {
         user = await apiClient.profile();
+        activeLearningSpaceId = apiClient.learningSpaceId;
         if (!canUseTeacherMode) activeMode = learnerMode;
       } on ApiException catch (exception) {
         if (exception.statusCode == 401) {
@@ -85,6 +99,10 @@ class AuthController extends ChangeNotifier {
       apiClient.accessToken = token;
       user = session['user'] as Map<String, dynamic>;
       activeMode = learnerMode;
+      activeLearningSpaceId = null;
+      activeLearningSpaceKind = 'self';
+      activeLearningSpaceName = 'Tự học';
+      apiClient.learningSpaceId = null;
       await tokenStore.write(token);
       return true;
     } on ApiException catch (exception) {
@@ -103,6 +121,10 @@ class AuthController extends ChangeNotifier {
     user = null;
     apiClient.accessToken = null;
     activeMode = learnerMode;
+    activeLearningSpaceId = null;
+    activeLearningSpaceKind = 'self';
+    activeLearningSpaceName = 'Tự học';
+    apiClient.learningSpaceId = null;
     error = null;
     await tokenStore.clear();
     notifyListeners();

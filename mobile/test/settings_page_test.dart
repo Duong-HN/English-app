@@ -19,6 +19,18 @@ void main() {
       baseUrl: 'https://api.example.test',
       client: MockClient((request) async {
         expect(request.method, 'GET');
+        if (request.url.path == '/api/v1/learning-spaces') {
+          return _jsonResponse({
+            'items': [
+              {
+                'id': 'self-1',
+                'kind': 'self',
+                'name': 'Tự học',
+                'current_level': 'B1',
+              },
+            ],
+          });
+        }
         expect(request.url.path, '/api/v1/teacher-applications/me');
         return _jsonResponse({'application': null});
       }),
@@ -76,6 +88,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.activeMode, AuthController.teacherMode);
+    controller.dispose();
+  });
+
+  testWidgets('learner can switch between self-study and a class space', (
+    tester,
+  ) async {
+    final apiClient = ApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/v1/learning-spaces');
+        return _jsonResponse({
+          'items': [
+            {
+              'id': 'self-1',
+              'kind': 'self',
+              'name': 'Tự học',
+              'current_level': 'B1',
+            },
+            {
+              'id': 'class-1',
+              'kind': 'class',
+              'name': 'Lớp · IELTS 01',
+              'class_id': 'class-1',
+            },
+          ],
+        });
+      }),
+    )..accessToken = 'learner-token';
+    final controller = _controller(apiClient, role: 'learner');
+
+    await tester.pumpWidget(
+      MaterialApp(home: SettingsPage(authController: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('learning-space-class-1')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('learning-space-class-1')));
+    await tester.pumpAndSettle();
+
+    expect(controller.activeLearningSpaceId, 'class-1');
+    expect(apiClient.learningSpaceId, 'class-1');
     controller.dispose();
   });
 

@@ -8,6 +8,7 @@ class DashboardPage extends StatefulWidget {
     required this.apiClient,
     required this.displayName,
     required this.onOpenLearningPath,
+    required this.onOpenCurriculum,
     required this.onOpenClasses,
     required this.onOpenStudy,
   });
@@ -15,6 +16,7 @@ class DashboardPage extends StatefulWidget {
   final ApiClient apiClient;
   final String displayName;
   final VoidCallback onOpenLearningPath;
+  final VoidCallback onOpenCurriculum;
   final VoidCallback onOpenClasses;
   final ValueChanged<Map<String, dynamic>?> onOpenStudy;
 
@@ -76,6 +78,7 @@ class DashboardPageState extends State<DashboardPage> {
               return _DashboardContent(
                 payload: snapshot.data ?? const {},
                 onOpenLearningPath: widget.onOpenLearningPath,
+                onOpenCurriculum: widget.onOpenCurriculum,
                 onOpenClasses: widget.onOpenClasses,
                 onOpenStudy: widget.onOpenStudy,
               );
@@ -91,17 +94,21 @@ class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     required this.payload,
     required this.onOpenLearningPath,
+    required this.onOpenCurriculum,
     required this.onOpenClasses,
     required this.onOpenStudy,
   });
 
   final Map<String, dynamic> payload;
   final VoidCallback onOpenLearningPath;
+  final VoidCallback onOpenCurriculum;
   final VoidCallback onOpenClasses;
   final ValueChanged<Map<String, dynamic>?> onOpenStudy;
 
   @override
   Widget build(BuildContext context) {
+    final isClassSpace = payload['space_kind']?.toString() == 'class';
+    final spaceName = payload['space_name']?.toString();
     final today = _asMap(payload['today']) ?? const <String, dynamic>{};
     final path =
         _asMap(
@@ -171,7 +178,7 @@ class _DashboardContent extends StatelessWidget {
                     const Icon(Icons.today_outlined),
                     const SizedBox(width: 8),
                     Text(
-                      'Kế hoạch hôm nay',
+                      isClassSpace ? 'Nhiệm vụ của lớp' : 'Kế hoạch hôm nay',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const Spacer(),
@@ -183,22 +190,28 @@ class _DashboardContent extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   plannedMinutes == 0
-                      ? 'Chưa có nhiệm vụ được lên lịch.'
+                      ? isClassSpace
+                            ? 'Giáo viên chưa giao nhiệm vụ mới.'
+                            : 'Chưa có nhiệm vụ được lên lịch.'
+                      : isClassSpace
+                      ? '$plannedMinutes phút từ các bài giáo viên giao.'
                       : '$plannedMinutes phút đã được lên kế hoạch từ lộ trình và lớp học.',
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   key: const Key('continue-learning'),
-                  onPressed: outstandingClassTasks.isNotEmpty
+                  onPressed: isClassSpace || outstandingClassTasks.isNotEmpty
                       ? onOpenClasses
                       : () => onOpenStudy(nextPersonalTask),
                   icon: Icon(
-                    outstandingClassTasks.isNotEmpty
+                    isClassSpace || outstandingClassTasks.isNotEmpty
                         ? Icons.assignment_outlined
                         : Icons.play_arrow,
                   ),
                   label: Text(
-                    outstandingClassTasks.isNotEmpty
+                    isClassSpace
+                        ? 'Mở không gian lớp'
+                        : outstandingClassTasks.isNotEmpty
                         ? 'Làm bài từ lớp'
                         : 'Tiếp tục học',
                   ),
@@ -208,53 +221,128 @@ class _DashboardContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.route_outlined),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Lộ trình của tôi',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    if (level != null) Chip(label: Text(level)),
-                  ],
-                ),
-                if (goal != null) ...[const SizedBox(height: 8), Text(goal)],
-                const SizedBox(height: 12),
-                if (personalTasks.isEmpty)
-                  const Text('Lộ trình chưa có nhiệm vụ cho hôm nay.')
-                else
-                  ...personalTasks
-                      .take(2)
-                      .map(
-                        (task) => _TaskTile(
-                          task: task,
-                          fromClass: false,
-                          onTap: () => onOpenStudy(task),
+        if (!isClassSpace)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.route_outlined),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Lộ trình của tôi',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    key: const Key('open-learning-path'),
-                    onPressed: onOpenLearningPath,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Xem toàn bộ lộ trình'),
+                      if (level != null) Chip(label: Text(level)),
+                    ],
                   ),
-                ),
-              ],
+                  if (goal != null) ...[const SizedBox(height: 8), Text(goal)],
+                  const SizedBox(height: 12),
+                  if (personalTasks.isEmpty)
+                    const Text('Lộ trình chưa có nhiệm vụ cho hôm nay.')
+                  else
+                    ...personalTasks
+                        .take(2)
+                        .map(
+                          (task) => _TaskTile(
+                            task: task,
+                            fromClass: false,
+                            onTap: () => onOpenStudy(task),
+                          ),
+                        ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const Key('open-learning-path'),
+                      onPressed: onOpenLearningPath,
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('Xem toàn bộ lộ trình'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 14),
+        if (!isClassSpace) const SizedBox(height: 14),
+        if (isClassSpace)
+          Card(
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.groups_2_outlined),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          spaceName ?? 'Không gian lớp học',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Bài học và bài tập trong không gian này chỉ đến từ giáo viên của lớp. Dữ liệu không trộn với phần tự học.',
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    key: const Key('open-class-workspace'),
+                    onPressed: onOpenClasses,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('Mở bài tập lớp'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (isClassSpace) const SizedBox(height: 14),
+        if (!isClassSpace)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.menu_book_outlined),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Giáo trình theo level',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Học theo chương cố định, gồm bài đọc, nghe, từ vựng và ngữ pháp. IELTS có khóa riêng theo band.',
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const Key('open-curriculum'),
+                      onPressed: onOpenCurriculum,
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('Mở thư viện khóa học'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (!isClassSpace) const SizedBox(height: 14),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(18),

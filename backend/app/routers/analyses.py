@@ -6,7 +6,8 @@ from ..ai import build_provider
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Analysis, LearningPath, User, utc_now
+from ..learning_spaces import get_learning_space
+from ..models import Analysis, LearningPath, LearningSpace, User, utc_now
 from ..schemas import (
     AnalysisRequest,
     AnalysisResponse,
@@ -25,6 +26,7 @@ async def create_analysis(
     request: AnalysisRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
     settings: Settings = Depends(get_settings),
 ):
     learning_path = None
@@ -33,6 +35,7 @@ async def create_analysis(
             select(LearningPath).where(
                 LearningPath.id == request.learning_path_id,
                 LearningPath.user_id == user.id,
+                LearningPath.space_id == space.id,
             )
         )
         if learning_path is None:
@@ -58,6 +61,7 @@ async def create_analysis(
     score = result.get("score")
     analysis = Analysis(
         user_id=user.id,
+        space_id=space.id,
         type=analysis_type,
         input_text=request.input_text,
         result=result,
@@ -90,8 +94,9 @@ def list_analyses(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    filters = Analysis.user_id == user.id
+    filters = (Analysis.user_id == user.id) & (Analysis.space_id == space.id)
     total = db.scalar(select(func.count()).select_from(Analysis).where(filters)) or 0
     rows = db.scalars(
         select(Analysis).where(filters).order_by(Analysis.created_at.desc()).offset(offset).limit(limit)
@@ -107,8 +112,15 @@ def get_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    analysis = db.scalar(select(Analysis).where(Analysis.id == analysis_id, Analysis.user_id == user.id))
+    analysis = db.scalar(
+        select(Analysis).where(
+            Analysis.id == analysis_id,
+            Analysis.user_id == user.id,
+            Analysis.space_id == space.id,
+        )
+    )
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     return AnalysisResponse.model_validate(analysis)
@@ -119,8 +131,15 @@ def delete_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
 ):
-    analysis = db.scalar(select(Analysis).where(Analysis.id == analysis_id, Analysis.user_id == user.id))
+    analysis = db.scalar(
+        select(Analysis).where(
+            Analysis.id == analysis_id,
+            Analysis.user_id == user.id,
+            Analysis.space_id == space.id,
+        )
+    )
     if analysis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     db.delete(analysis)

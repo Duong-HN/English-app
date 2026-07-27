@@ -14,6 +14,31 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _studyReminders = true;
+  late Future<List<Map<String, dynamic>>> _spacesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _spacesFuture = _loadSpaces();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadSpaces() async {
+    final spaces = await widget.authController.apiClient.learningSpaces();
+    if (spaces.isNotEmpty &&
+        widget.authController.activeLearningSpaceId == null) {
+      final selfSpace = spaces.firstWhere(
+        (space) => space['kind']?.toString() == 'self',
+        orElse: () => spaces.first,
+      );
+      widget.authController.setActiveLearningSpace(selfSpace);
+    }
+    return spaces;
+  }
+
+  void _selectLearningSpace(Map<String, dynamic> space) {
+    widget.authController.setActiveLearningSpace(space);
+    Navigator.of(context).pop();
+  }
 
   void _selectMode(String mode) {
     if (mode == widget.authController.activeMode) return;
@@ -75,6 +100,58 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 22),
+          _SectionLabel(label: 'Không gian học tập'),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _spacesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.cloud_off_outlined),
+                    title: const Text('Không tải được không gian học'),
+                    trailing: IconButton(
+                      tooltip: 'Thử lại',
+                      onPressed: () => setState(() {
+                        _spacesFuture = _loadSpaces();
+                      }),
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ),
+                );
+              }
+              final spaces = snapshot.data ?? const [];
+              if (spaces.isEmpty) {
+                return const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.auto_stories_outlined),
+                    title: Text('Chưa có không gian học tập'),
+                  ),
+                );
+              }
+              return Column(
+                children: spaces
+                    .map(
+                      (space) => _LearningSpaceCard(
+                        space: space,
+                        selected:
+                            space['id']?.toString() ==
+                            widget.authController.activeLearningSpaceId,
+                        onTap: () => _selectLearningSpace(space),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
           ),
           const SizedBox(height: 22),
           _SectionLabel(label: 'Chế độ sử dụng'),
@@ -153,6 +230,45 @@ class _SettingsPageState extends State<SettingsPage> {
             label: const Text('Đăng xuất'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LearningSpaceCard extends StatelessWidget {
+  const _LearningSpaceCard({
+    required this.space,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> space;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isClass = space['kind']?.toString() == 'class';
+    final level = space['current_level']?.toString();
+    final course = space['course_code']?.toString();
+    final metadata = <String>[
+      isClass ? 'Bài giao từ giáo viên' : 'Giáo trình tự học theo level',
+    ];
+    if (level != null) metadata.add(level);
+    if (course != null) metadata.add(course);
+    return Card(
+      color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
+      child: ListTile(
+        key: ValueKey('learning-space-${space['id']}'),
+        onTap: onTap,
+        leading: Icon(
+          isClass ? Icons.groups_outlined : Icons.auto_stories_outlined,
+        ),
+        title: Text(space['name']?.toString() ?? 'Không gian học tập'),
+        subtitle: Text(metadata.join(' · ')),
+        trailing: selected
+            ? const Icon(Icons.check_circle, color: Colors.green)
+            : const Icon(Icons.chevron_right),
       ),
     );
   }
