@@ -66,3 +66,6 @@ mobile/android/app/*.keystore
 /postman/globals/
 /postman/flows/
 /postman/mocks/
+
+# Generated Stitch/design exports
+/stitch_*.zip

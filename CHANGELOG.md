@@ -10,6 +10,10 @@ All notable changes to LearnMate AI are recorded here.
 - Personalized Home dashboard that combines the learner's daily budget, next personal task and pending class assignments.
 - Dedicated teacher role, class invite codes, member rosters, deadline-based assignments, AI-assisted submissions and teacher feedback.
 - Flutter class joining, assignment submission and onboarding result screens, plus a teacher workspace in the existing web portal.
+- Structured English A2-to-B1 content pack with six original lessons, practice activities, answer keys and provenance metadata.
+- Alembic revision `0010` for structured lesson content, content-pack seeding and mobile practice rendering.
+- Teacher/admin portal role routing documentation: teachers manage classes and assignments on web, while learners use mobile.
+- Project-scoped Stitch MCP configuration and Teacher mode/dashboard implementation plan.
 - Alembic revision `0005` and cross-role backend, Flutter and web coverage for onboarding and classroom isolation.
 - Dictionary API and Datamuse word details with shared caching, pronunciation audio, collocation chips and Alembic revision `0006`.
 

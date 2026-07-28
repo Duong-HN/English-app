@@ -1,11 +1,11 @@
-# LearnMate Admin
+# LearnMate Teacher/Admin Portal
 
 Web quản trị dành cho đội vận hành LearnMate AI. Ứng dụng dùng API backend thật,
 không chứa dữ liệu dashboard giả lập.
 
 ## Chức năng
 
-- Đăng nhập bằng JWT và chặn tài khoản không có role `admin`.
+- Đăng nhập bằng JWT; tài khoản `teacher` vào Teacher Dashboard, còn `admin` vào Admin Dashboard.
 - Tổng quan người dùng, bài phân tích, lộ trình học và xu hướng 7 ngày.
 - Tìm kiếm, phân trang, đổi vai trò và khóa/mở tài khoản.
 - Xem chi tiết, lọc và xóa bài phân tích.
@@ -47,6 +47,11 @@ python -m app.cli create-admin --email admin@example.com --display-name "System 
 ```
 
 ## Kiểm tra
+
+Learner accounts are intentionally rejected by this portal. A teacher uses the
+same email/password account created on mobile after the teacher application is
+approved. Mobile Teacher mode is only an overview/handoff; class creation,
+assignment delivery, submission review and feedback remain here.
 
 ```bash
 npm run lint

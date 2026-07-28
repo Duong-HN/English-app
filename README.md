@@ -1,6 +1,6 @@
 # LearnMate AI
 
-LearnMate AI is a graduation-project MVP for formative English learning. It combines a Flutter mobile application, an administrator web console, on-device OCR, speech-to-text, a FastAPI backend, PostgreSQL/SQLite and a replaceable AI provider.
+LearnMate AI is a graduation-project MVP for formative English learning. It combines a Flutter mobile application, a teacher/administrator web portal, on-device OCR, speech-to-text, a FastAPI backend, PostgreSQL/SQLite and a replaceable AI provider.
 
 > AI feedback and scores are formative. The application does not claim to provide an official IELTS score or infer pronunciation quality from a transcript.
 
@@ -16,6 +16,8 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
   authenticated streaming, transcript/caption and resumable media progress.
 - Home dashboard scoped to the active space: self-study shows the personal course/path, class mode shows teacher work.
 - Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
+- Structured English A2-to-B1 content pack with six original lessons, practice activities, answer keys and provenance metadata.
+- Teacher mode on mobile is a compact overview; full class management remains in the responsive Teacher Dashboard web portal.
 - Administrator RBAC, account moderation and immutable audit logs.
 - Responsive teacher/administrator web portal for classes, live metrics, moderation and an authenticated API Console.
 - Reading analysis with translation, vocabulary and questions.
@@ -53,7 +55,7 @@ Flutter mobile                         Teacher/admin web
 ```text
 backend/           FastAPI, database migrations and backend tests
 mobile/            Flutter application for Android, iOS and web preview
-admin-dashboard/   Administrator dashboard and authenticated API Console
+admin-dashboard/   Teacher/administrator dashboard and authenticated API Console
 postman/           Versioned API collection and secret-free local environment
 docs/              Architecture, API, testing and deployment documentation
 scripts/           Local verification and release-readiness scripts
@@ -104,6 +106,14 @@ npm run dev
 Public registration creates learners. A learner can submit a teacher application from mobile Cài đặt; an administrator reviews it in the Hồ sơ giáo viên section. Approved accounts keep the same data and can switch between learner and teacher mode from Cài đặt: the mobile app remains the learner space while the web portal creates classes, shares invite codes, assigns work and reviews submissions.
 
 Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
+
+### Role and dashboard boundary
+
+Public registration creates learner accounts. A learner can apply to become a teacher from mobile Settings; an administrator
+reviews the application before teacher access is granted. Approved teacher accounts can switch between learner and teacher
+mode in mobile Settings. Learners receive and submit assignments on mobile, while teachers create classes, assign work,
+review submissions and send feedback through the Teacher Dashboard web portal. The mobile Teacher mode is an overview and
+handoff, not a second native implementation of the full teacher dashboard.
 
 ## Quick start with Docker
 
@@ -156,5 +166,7 @@ Production requirements:
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)
 - [Git and releases](docs/GIT_WORKFLOW.md)
 - [Codex and LearnMate MCP](docs/MCP.md)
+- [Teacher mode and dashboard plan](plan2.md)
+- [Content and implementation plan](plan.md)
 - [Security](SECURITY.md)
 - [Changelog](CHANGELOG.md)

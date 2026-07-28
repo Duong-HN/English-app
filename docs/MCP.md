@@ -14,10 +14,15 @@ Set-Location D:\GraduationProject\backend
 .\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-The repository's `.codex/config.toml` registers two project-scoped servers:
+The repository's `.codex/config.toml` registers three project-scoped servers:
 
 - `openaiDeveloperDocs`: the remote OpenAI documentation server.
 - `learnmate`: the local server launched from the backend virtual environment over STDIO.
+- `stitch`: the remote Stitch design server over Streamable HTTP. It reads the API key from the local
+  `STITCH_API_KEY` environment variable and sends it through the `X-Goog-Api-Key` header.
+
+Create the Stitch API key in Stitch Settings, then set it locally before starting Codex. Never put the key in
+`.codex/config.toml`, Git, a prompt or a URL. The project config only contains the environment-variable mapping.
 
 Project MCP configuration is loaded only when the repository is trusted. Restart Codex after the initial setup,
 then inspect the connections with `/mcp` or:
@@ -27,6 +32,7 @@ Set-Location D:\GraduationProject
 codex mcp list
 codex mcp get openaiDeveloperDocs --json
 codex mcp get learnmate --json
+codex mcp get stitch --json
 ```
 
 ## Tools
