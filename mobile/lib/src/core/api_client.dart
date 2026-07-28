@@ -60,6 +60,7 @@ class ApiClient {
     required String inputText,
     String? learningPathId,
     int? taskDay,
+    String? lessonId,
   }) {
     return _post(
       '/api/v1/analyses/$type',
@@ -69,6 +70,7 @@ class ApiClient {
             ? null
             : {'learning_path_id': learningPathId}),
         ...?(taskDay == null ? null : {'task_day': taskDay}),
+        ...?(lessonId == null ? null : {'lesson_id': lessonId}),
       },
     );
   }
@@ -207,6 +209,37 @@ class ApiClient {
         ...?(note == null ? null : {'note': note}),
       },
     );
+  }
+
+  Future<Map<String, dynamic>> updateLessonMediaProgress({
+    required String lessonId,
+    required String mediaId,
+    required int positionSeconds,
+    required bool completed,
+  }) {
+    return _patch(
+      '/api/v1/content/lessons/${Uri.encodeComponent(lessonId)}/media-progress',
+      body: {
+        'media_id': mediaId,
+        'position_seconds': positionSeconds,
+        'completed': completed,
+      },
+    );
+  }
+
+  String resolveMediaUrl(String value) {
+    final parsed = Uri.tryParse(value);
+    if (parsed != null && parsed.hasScheme) return value;
+    return '$baseUrl${value.startsWith('/') ? value : '/$value'}';
+  }
+
+  Map<String, String> mediaHeaders() {
+    final headers = <String, String>{};
+    if (accessToken != null) headers['Authorization'] = 'Bearer $accessToken';
+    if (learningSpaceId != null && learningSpaceId!.isNotEmpty) {
+      headers['X-Learning-Space-ID'] = learningSpaceId!;
+    }
+    return headers;
   }
 
   Future<Map<String, dynamic>> teacherApplication() {

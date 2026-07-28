@@ -18,6 +18,8 @@ services:
       context: ./backend
     ports:
       - "8000:8000"
+    volumes:
+      - learnmate_media:/data/media
     environment:
       APP_ENV: development
       DATABASE_URL: postgresql+psycopg://learnmate:local-development-password@db:5432/learnmate
@@ -25,6 +27,8 @@ services:
       JWT_SECRET: local-docker-secret-change-before-production
       ENABLE_DEV_AUTH: "false"
       AI_PROVIDER: mock
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MAX_SIZE_MB: "100"
       ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080
     depends_on:
       db:
@@ -54,3 +58,4 @@ services:
 
 volumes:
   learnmate_postgres:
+  learnmate_media:

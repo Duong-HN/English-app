@@ -12,6 +12,8 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 - Onboarding choice between self-study and joining a teacher's class; the active space can be changed in Settings.
 - Strict self/class data isolation for level, placement, path, analysis, vocabulary and lesson progress.
 - Fixed level/chapter curriculum, four IELTS band tracks (4.5–8.0), and a lesson library API with progress tracking.
+- Real lesson media pipeline: admin uploads licensed audio/video or registers a hosted URL; mobile plays it with
+  authenticated streaming, transcript/caption and resumable media progress.
 - Home dashboard scoped to the active space: self-study shows the personal course/path, class mode shows teacher work.
 - Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
 - Administrator RBAC, account moderation and immutable audit logs.
@@ -36,8 +38,8 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 Flutter mobile                         Teacher/admin web
   ├─ secure auth token                        ├─ operations dashboard
   ├─ onboarding + self/class spaces           ├─ classes and assignments
-  ├─ camera -> OCR -> editable text           └─ authenticated API Console
-  └─ microphone -> STT transcript                       |
+  ├─ camera -> OCR -> editable text           ├─ curriculum media manager
+  └─ microphone -> STT transcript              └─ authenticated API Console
                  |                                      |
                  +----------> FastAPI REST API <---------+
                                    |

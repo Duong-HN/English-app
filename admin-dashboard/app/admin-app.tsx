@@ -11,6 +11,8 @@ import {
   ApiError,
   AuditLog,
   ClassMember,
+  ContentCourse,
+  ContentLesson,
   SessionUser,
   TeacherApplication,
   TeacherAssignment,
@@ -20,7 +22,7 @@ import {
 import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "teacher-applications" | "analyses" | "paths" | "audit" | "console";
+type View = "overview" | "users" | "teacher-applications" | "analyses" | "paths" | "content" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
@@ -32,8 +34,9 @@ const navItems: Array<{ id: View; label: string; short: string }> = [
   { id: "teacher-applications", label: "Hồ sơ giáo viên", short: "03" },
   { id: "analyses", label: "Bài phân tích", short: "04" },
   { id: "paths", label: "Lộ trình học", short: "05" },
-  { id: "audit", label: "Nhật ký quản trị", short: "06" },
-  { id: "console", label: "API Console", short: "07" },
+  { id: "content", label: "Nội dung media", short: "06" },
+  { id: "audit", label: "Nhật ký quản trị", short: "07" },
+  { id: "console", label: "API Console", short: "08" },
 ];
 
 function formatDate(value: string | null, withTime = true) {
@@ -643,10 +646,245 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           {view === "teacher-applications" && <TeacherApplicationsPage api={api} />}
           {view === "analyses" && <AnalysesPage api={api} />}
           {view === "paths" && <LearningPathsPage api={api} />}
+          {view === "content" && <ContentPage api={api} />}
           {view === "audit" && <AuditPage api={api} />}
           {view === "console" && <ApiConsole api={api} baseUrl={session.baseUrl} />}
         </main>
       </div>
+    </div>
+  );
+}
+
+function ContentPage({ api }: { api: AdminApi }) {
+  const [courses, setCourses] = useState<ContentCourse[] | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState("");
+  const [lesson, setLesson] = useState<ContentLesson | null>(null);
+  const [loadingLesson, setLoadingLesson] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const lessonOptions = useMemo(
+    () =>
+      (courses ?? []).flatMap((course) =>
+        course.units.flatMap((unit) =>
+          unit.lessons.map((item) => ({
+            ...item,
+            courseTitle: course.title,
+            unitTitle: unit.title,
+            unitNumber: unit.unit_number,
+          })),
+        ),
+      ),
+    [courses],
+  );
+
+  const loadLesson = useCallback(async (lessonId: string) => {
+    if (!lessonId) {
+      setLesson(null);
+      return;
+    }
+    setLoadingLesson(true);
+    try {
+      setLesson(await api.contentLesson(lessonId));
+      setError(null);
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setLoadingLesson(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    let active = true;
+    api.contentCourses()
+      .then((response) => {
+        if (!active) return;
+        setCourses(response.items);
+        const first = response.items[0]?.units[0]?.lessons[0]?.id ?? "";
+        setSelectedLessonId((current) => current || first);
+      })
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setLoadingLesson(false));
+    return () => { active = false; };
+  }, [api]);
+
+  useEffect(() => {
+    if (!selectedLessonId) return;
+    let active = true;
+    api.contentLesson(selectedLessonId)
+      .then((response) => {
+        if (!active) return;
+        setLesson(response);
+        setError(null);
+      })
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setLoadingLesson(false));
+    return () => { active = false; };
+  }, [api, selectedLessonId]);
+
+  async function refreshLesson() {
+    if (selectedLessonId) await loadLesson(selectedLessonId);
+    const response = await api.contentCourses();
+    setCourses(response.items);
+  }
+
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedLessonId || !file) {
+      setError("Hãy chọn một file audio hoặc video trước khi tải lên.");
+      return;
+    }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const title = String(form.get("title") ?? "").trim();
+    const mediaType = String(form.get("media_type") ?? "audio") as "audio" | "video";
+    const transcript = String(form.get("transcript") ?? "").trim();
+    const duration = Number(form.get("duration_seconds") ?? 0);
+    if (!title) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.uploadLessonMedia(selectedLessonId, {
+        file,
+        mediaType,
+        title,
+        ...(transcript ? { transcript } : {}),
+        ...(duration > 0 ? { durationSeconds: duration } : {}),
+      });
+      formElement.reset();
+      setFile(null);
+      await refreshLesson();
+      setNotice("Đã tải media lên bài học.");
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function registerUrl(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedLessonId) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const title = String(form.get("url_title") ?? "").trim();
+    const sourceUrl = String(form.get("source_url") ?? "").trim();
+    const mediaType = String(form.get("url_media_type") ?? "audio") as "audio" | "video";
+    const mimeType = String(form.get("mime_type") ?? "").trim();
+    if (!title || !sourceUrl || !mimeType) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.registerLessonMediaUrl(selectedLessonId, {
+        media_type: mediaType,
+        title,
+        source_url: sourceUrl,
+        mime_type: mimeType,
+      });
+      formElement.reset();
+      await refreshLesson();
+      setNotice("Đã gắn URL media vào bài học.");
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMedia(mediaId: string) {
+    if (!window.confirm("Xóa media này khỏi bài học?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteLessonMedia(mediaId);
+      await refreshLesson();
+      setNotice("Đã xóa media khỏi bài học.");
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="page-stack">
+      <section className="section-heading">
+        <div>
+          <p className="eyebrow blue">Curriculum media</p>
+          <h2>Audio và video bài học</h2>
+          <p className="muted">File được lưu ngoài database; học viên nhận URL stream có kiểm soát quyền.</p>
+        </div>
+        <span className="count-badge">{lesson?.media.length ?? 0} media</span>
+      </section>
+      {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+      {notice && <div className="inline-alert success-alert" role="status">{notice}</div>}
+
+      <section className="panel">
+        <label className="field">
+          <span>Chọn bài học</span>
+          <select value={selectedLessonId} onChange={(event) => { setSelectedLessonId(event.target.value); setLesson(null); setLoadingLesson(true); }}>
+            {!courses && <option value="">Đang tải giáo trình…</option>}
+            {lessonOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.courseTitle} · Chương {item.unitNumber} · Bài {item.lesson_number}: {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      {loadingLesson ? <LoadingState label="Đang tải bài học…" /> : !lesson ? <EmptyState message="Chưa có bài học để quản lý." /> : (
+        <>
+          <section className="panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">{lesson.course_code} · Chương {lesson.unit_number}</p><h3>{lesson.title}</h3></div>
+              <span className="panel-chip">{lesson.skill} · {lesson.media.length} media</span>
+            </div>
+            <p className="muted">{lesson.summary}</p>
+          </section>
+
+          <section className="dashboard-grid">
+            <form className="panel teacher-form" onSubmit={upload}>
+              <div className="panel-heading"><div><p className="eyebrow">Local / mounted storage</p><h3>Tải file lên</h3></div></div>
+              <label className="field"><span>File audio/video</span><input name="file" type="file" accept="audio/*,video/*" required onChange={(event) => setFile(event.currentTarget.files?.[0] ?? null)} /></label>
+              <label className="field"><span>Loại</span><select name="media_type" defaultValue="audio"><option value="audio">Audio</option><option value="video">Video</option></select></label>
+              <label className="field"><span>Tên media</span><input name="title" required placeholder="Listening practice 01" /></label>
+              <label className="field"><span>Thời lượng (giây)</span><input name="duration_seconds" type="number" min={1} placeholder="120" /></label>
+              <label className="field"><span>Transcript / caption</span><textarea name="transcript" rows={4} placeholder="Transcript để LLM dùng làm ngữ cảnh…" /></label>
+              <button className="primary-button" type="submit" disabled={busy || !selectedLessonId}>{busy ? "Đang tải…" : "Tải media lên"}</button>
+            </form>
+
+            <form className="panel teacher-form" onSubmit={registerUrl}>
+              <div className="panel-heading"><div><p className="eyebrow">Licensed CDN</p><h3>Gắn URL có sẵn</h3></div></div>
+              <label className="field"><span>Loại</span><select name="url_media_type" defaultValue="audio"><option value="audio">Audio</option><option value="video">Video</option></select></label>
+              <label className="field"><span>Tên media</span><input name="url_title" required placeholder="Official listening track" /></label>
+              <label className="field"><span>Source URL</span><input name="source_url" type="url" required placeholder="https://cdn.example.com/track.mp3" /></label>
+              <label className="field"><span>MIME type</span><input name="mime_type" required placeholder="audio/mpeg" /></label>
+              <p className="muted">Chỉ dùng file do bạn sở hữu hoặc có giấy phép sử dụng.</p>
+              <button className="secondary-button" type="submit" disabled={busy || !selectedLessonId}>Gắn URL</button>
+            </form>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading"><div><p className="eyebrow">Published assets</p><h3>Media đã gắn</h3></div><span className="count-badge">{lesson.media.length}</span></div>
+            {lesson.media.length === 0 ? <EmptyState message="Bài học chưa có audio/video thật." /> : (
+              <div className="submission-list">
+                {lesson.media.map((media) => (
+                  <article className="submission-card" key={media.id}>
+                    <header><div><strong>{media.title}</strong><small>{media.media_type} · {media.mime_type} · {media.file_size_bytes ? `${Math.ceil(media.file_size_bytes / 1024)} KB` : "URL ngoài"}</small></div><span className={`status-pill ${media.is_published ? "active" : "locked"}`}>{media.is_published ? "Published" : "Draft"}</span></header>
+                    <p className="muted">{media.transcript || "Chưa có transcript; LLM sẽ chưa có transcript media để grounding."}</p>
+                    <div className="account-menu"><code>{media.media_url}</code><button className="row-button" type="button" disabled={busy} onClick={() => void removeMedia(media.id)}>Xóa</button></div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -97,6 +97,11 @@ class Analysis(Base):
     result: Mapped[dict] = mapped_column(JSON)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     provider: Mapped[str] = mapped_column(String(32), default="mock")
+    lesson_id: Mapped[str | None] = mapped_column(
+        ForeignKey("lessons.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     learning_path_id: Mapped[str | None] = mapped_column(
         ForeignKey("learning_paths.id", ondelete="SET NULL"),
         nullable=True,
@@ -434,12 +439,57 @@ class Lesson(Base):
     body: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    content_pack: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_attribution: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    license_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     duration_minutes: Mapped[int] = mapped_column(default=15)
     unit: Mapped[CourseUnit] = relationship(back_populates="lessons")
+    media_items: Mapped[list[LessonMedia]] = relationship(
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+        order_by="LessonMedia.sort_order, LessonMedia.created_at",
+    )
     progress: Mapped[list[LessonProgress]] = relationship(
         back_populates="lesson",
         cascade="all, delete-orphan",
     )
+
+
+class LessonMedia(Base):
+    """An audio/video asset attached to a curriculum lesson.
+
+    ``storage_key`` points at the private media volume used by the API. A
+    ``source_url`` is also supported for licensed assets already hosted by a
+    CDN. Learner-facing responses expose an authenticated stream URL, never
+    the private storage key.
+    """
+
+    __tablename__ = "lesson_media"
+    __table_args__ = (
+        UniqueConstraint("lesson_id", "sort_order", "title", name="uq_lesson_media_position_title"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    lesson_id: Mapped[str] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True)
+    media_type: Mapped[str] = mapped_column(String(16), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True, unique=True)
+    source_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    mime_type: Mapped[str] = mapped_column(String(120))
+    file_size_bytes: Mapped[int | None] = mapped_column(nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(nullable=True)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    sort_order: Mapped[int] = mapped_column(default=0)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lesson: Mapped[Lesson] = relationship(back_populates="media_items")
 
 
 class LessonProgress(Base):
@@ -452,6 +502,7 @@ class LessonProgress(Base):
     status: Mapped[str] = mapped_column(String(24), default="started", index=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_progress: Mapped[dict] = mapped_column(JSON, default=dict)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

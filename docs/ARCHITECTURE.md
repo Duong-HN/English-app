@@ -20,6 +20,7 @@ STT text is never presented as evidence of pronunciation accuracy.
 | API | FastAPI / Python 3.14 | Auth, onboarding, classes, validation, AI orchestration and history |
 | ORM/migrations | SQLAlchemy / Alembic | Relational persistence and versioned schema |
 | Database | SQLite dev, PostgreSQL prod | Users, analyses, learning paths and audit records |
+| Media storage | Private mounted volume (`MEDIA_STORAGE_DIR`) | Audio/video binaries outside the relational database |
 | AI | Mock or Gemini | Structured formative feedback |
 | Delivery | Docker / Cloudflare Worker / GitHub Actions / GHCR | Test, package, release and deploy mobile/API/admin |
 
@@ -35,6 +36,20 @@ API -> AI provider: prompt + JSON schema
 AI provider -> API: structured result
 API -> Database: persist analysis for user
 API -> Flutter: result
+```
+
+Lesson media and AI grounding flow:
+
+```text
+Admin -> API: multipart audio/video + transcript/caption
+API -> Private media volume: store binary with generated key
+API -> Database: LessonMedia metadata and lesson relationship
+Learner -> API: lesson + authenticated media stream URL
+Flutter -> Audio/Video player: stream with Bearer token
+Flutter -> API: media position/completion
+Learner -> API: OCR/text answer + lesson_id
+API -> AI provider: learner input + lesson objective/body/transcript context
+API -> Database: analysis with lesson_id and space boundary
 ```
 
 Learning-path flow:
@@ -85,7 +100,7 @@ API -> Web: operational data or structured API Console response
 
 ### analyses
 
-`id`, `user_id`, `space_id`, `type`, `input_text`, `result`, `score`, `provider`, `created_at`
+`id`, `user_id`, `space_id`, `type`, `input_text`, `result`, `score`, `provider`, `lesson_id`, `created_at`
 
 `analyses.user_id` and `analyses.space_id` are cascading foreign keys. Queries always include the authenticated user and
 active space. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
@@ -94,8 +109,9 @@ active space. AI-specific output remains JSON for MVP flexibility but is validat
 
 `learning_spaces` contains one self-study row per user and one class row per joined class. `learning_paths`,
 `placement_attempts`, `analyses`, `vocabulary_items` and `lesson_progress` carry `space_id`; their unique and query
-boundaries prevent class work from changing self-study level, progress or vocabulary. `courses`, `course_units` and
-`lessons` hold the fixed catalog; `lesson_progress` attaches it to a self-study space.
+`lessons` hold the fixed catalog; `lesson_progress` attaches it to a self-study space. `lesson_media` stores one or
+more published/draft audio/video assets per lesson, while `lesson_progress.media_progress` stores position and
+completion per media item. Media binaries are not stored in PostgreSQL/SQLite.
 
 ### admin_audit_logs
 
@@ -135,6 +151,7 @@ they joined. Administrator access is explicit and does not turn teachers into ad
 - Administrator endpoints require an active server-validated `admin` role.
 - The final active administrator and the current administrator session are protected from accidental lockout.
 - Production settings reject weak JWT secrets.
+- Lesson media uploads validate media type, size and private storage paths; stream access requires authentication.
 - Release signing keys are GitHub secrets, never repository files.
 
 ## Known production boundaries

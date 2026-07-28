@@ -56,6 +56,62 @@ export type TeacherAssignment = {
   created_at: string;
 };
 
+export type LessonMedia = {
+  id: string;
+  media_type: "audio" | "video";
+  title: string;
+  media_url: string;
+  mime_type: string;
+  file_size_bytes: number | null;
+  duration_seconds: number | null;
+  transcript: string | null;
+  caption_url: string | null;
+  sort_order: number;
+  is_published: boolean;
+  created_at: string;
+};
+
+export type ContentLessonSummary = {
+  id: string;
+  lesson_number: number;
+  title: string;
+  skill: string;
+  content_type: string;
+  summary: string;
+  duration_minutes: number;
+  progress_status?: string | null;
+  media_count: number;
+};
+
+export type ContentCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  kind: string;
+  level: string | null;
+  band_min: number | null;
+  band_max: number | null;
+  units: Array<{
+    id: string;
+    unit_number: number;
+    title: string;
+    objective: string;
+    lessons: ContentLessonSummary[];
+  }>;
+};
+
+export type ContentLesson = ContentLessonSummary & {
+  course_code: string;
+  course_title: string;
+  unit_number: number;
+  unit_title: string;
+  body: string;
+  transcript: string | null;
+  media_url: string | null;
+  media: LessonMedia[];
+};
+
 export type AssignmentSubmission = {
   id: string;
   assignment_id: string;
@@ -100,6 +156,7 @@ export type AdminAnalysis = {
   result: Record<string, unknown>;
   score: number | null;
   provider: string;
+  lesson_id: string | null;
   created_at: string;
 };
 
@@ -259,6 +316,35 @@ export class AdminApi {
     return body as T;
   }
 
+  private async requestForm<T>(path: string, form: FormData): Promise<T> {
+    const headers = new Headers({ Accept: "application/json" });
+    if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method: "POST",
+        headers,
+        body: form,
+      });
+    } catch (error) {
+      throw new ApiError(
+        error instanceof Error ? error.message : "Không thể kết nối backend.",
+        0,
+        null,
+      );
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    const body: unknown = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+    if (!response.ok) {
+      throw new ApiError(apiErrorDetail(body, response.status), response.status, body);
+    }
+    return body as T;
+  }
+
   async consoleRequest(request: ApiConsoleRequest): Promise<ApiConsoleResponse> {
     const path = request.path.trim();
     if (!path.startsWith("/") || path.startsWith("//")) {
@@ -393,6 +479,72 @@ export class AdminApi {
 
   classes() {
     return this.request<Page<TeacherClass>>("/api/v1/classes");
+  }
+
+  contentCourses() {
+    return this.request<{ items: ContentCourse[]; total: number }>(
+      "/api/v1/content/admin/courses",
+    );
+  }
+
+  contentLesson(lessonId: string) {
+    return this.request<ContentLesson>(
+      `/api/v1/content/admin/lessons/${encodeURIComponent(lessonId)}`,
+    );
+  }
+
+  uploadLessonMedia(
+    lessonId: string,
+    input: {
+      file: File;
+      mediaType: "audio" | "video";
+      title: string;
+      transcript?: string;
+      durationSeconds?: number;
+      sortOrder?: number;
+      isPublished?: boolean;
+    },
+  ) {
+    const form = new FormData();
+    form.set("file", input.file);
+    form.set("media_type", input.mediaType);
+    form.set("title", input.title);
+    if (input.transcript?.trim()) form.set("transcript", input.transcript.trim());
+    if (input.durationSeconds !== undefined) {
+      form.set("duration_seconds", String(input.durationSeconds));
+    }
+    form.set("sort_order", String(input.sortOrder ?? 0));
+    form.set("is_published", String(input.isPublished ?? true));
+    return this.requestForm<LessonMedia>(
+      `/api/v1/content/admin/lessons/${encodeURIComponent(lessonId)}/media`,
+      form,
+    );
+  }
+
+  registerLessonMediaUrl(
+    lessonId: string,
+    input: {
+      media_type: "audio" | "video";
+      title: string;
+      source_url: string;
+      mime_type: string;
+      transcript?: string;
+      duration_seconds?: number;
+      sort_order?: number;
+      is_published?: boolean;
+    },
+  ) {
+    return this.request<LessonMedia>(
+      `/api/v1/content/admin/lessons/${encodeURIComponent(lessonId)}/media/url`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+
+  deleteLessonMedia(mediaId: string) {
+    return this.request<void>(
+      `/api/v1/content/admin/media/${encodeURIComponent(mediaId)}`,
+      { method: "DELETE" },
+    );
   }
 
   createClass(input: { name: string; description?: string }) {

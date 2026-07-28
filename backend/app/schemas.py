@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 from .ai_schemas import LearningPathResult
 
 AnalysisType = Literal["reading", "writing", "speaking"]
+MediaType = Literal["audio", "video"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 GoalCode = Literal["ielts", "communication", "study_abroad", "work"]
 LearningSpaceKind = Literal["self", "class"]
@@ -113,6 +114,7 @@ class AnalysisRequest(BaseModel):
     input_text: str = Field(min_length=3, max_length=10000)
     learning_path_id: str | None = Field(default=None, max_length=64)
     task_day: int | None = Field(default=None, ge=1, le=7)
+    lesson_id: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def validate_task_context(self):
@@ -138,6 +140,7 @@ class AnalysisResponse(BaseModel):
     result: dict
     score: float | None
     provider: str
+    lesson_id: str | None
     learning_path_id: str | None
     task_day: int | None
     created_at: datetime
@@ -295,6 +298,7 @@ class CourseLessonSummary(BaseModel):
     summary: str
     duration_minutes: int
     progress_status: str | None = None
+    media_count: int = 0
 
 
 class CourseUnitResponse(BaseModel):
@@ -336,6 +340,68 @@ class LessonProgressUpdate(BaseModel):
         return cleaned or None
 
 
+class LessonMediaResponse(BaseModel):
+    id: str
+    media_type: MediaType
+    title: str
+    media_url: str
+    mime_type: str
+    file_size_bytes: int | None
+    duration_seconds: int | None
+    transcript: str | None
+    caption_url: str | None
+    sort_order: int
+    is_published: bool
+    created_at: datetime
+
+
+class LessonMediaProgressUpdate(BaseModel):
+    media_id: str = Field(min_length=1, max_length=64)
+    position_seconds: int = Field(ge=0, le=86_400)
+    completed: bool = False
+
+
+class LessonMediaProgressResponse(BaseModel):
+    position_seconds: int = Field(ge=0)
+    completed: bool
+    updated_at: datetime | None = None
+
+
+class LessonMediaUrlCreateRequest(BaseModel):
+    media_type: MediaType
+    title: str = Field(min_length=1, max_length=160)
+    source_url: str = Field(min_length=8, max_length=2048)
+    mime_type: str = Field(min_length=3, max_length=120)
+    duration_seconds: int | None = Field(default=None, ge=1, le=86_400)
+    transcript: str | None = Field(default=None, max_length=100_000)
+    caption_url: str | None = Field(default=None, max_length=2048)
+    sort_order: int = Field(default=0, ge=0, le=999)
+    is_published: bool = True
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("title must contain non-whitespace characters")
+        return cleaned
+
+    @field_validator("source_url", "caption_url")
+    @classmethod
+    def clean_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
+    @field_validator("transcript")
+    @classmethod
+    def clean_transcript(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class LessonResponse(BaseModel):
     id: str
     course_code: str
@@ -349,11 +415,16 @@ class LessonResponse(BaseModel):
     summary: str
     body: str
     transcript: str | None
+    content_pack: dict = Field(default_factory=dict)
+    source_attribution: str | None
+    license_name: str | None
     media_url: str | None
+    media: list[LessonMediaResponse] = Field(default_factory=list)
     duration_minutes: int
     progress_status: str | None
     progress_score: float | None
     completed_at: datetime | None
+    media_progress: dict[str, LessonMediaProgressResponse] = Field(default_factory=dict)
 
 
 class ClassCreateRequest(BaseModel):

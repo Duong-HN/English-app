@@ -232,6 +232,7 @@ void main() {
       inputText: 'My paragraph.',
       learningPathId: 'path-1',
       taskDay: 3,
+      lessonId: 'lesson-1',
     );
 
     expect(captured.url.path, '/api/v1/analyses/writing');
@@ -239,6 +240,7 @@ void main() {
       'input_text': 'My paragraph.',
       'learning_path_id': 'path-1',
       'task_day': 3,
+      'lesson_id': 'lesson-1',
     });
   });
 
@@ -319,6 +321,60 @@ void main() {
     expect(captured.headers['Authorization'], 'Bearer learner-token');
     expect(captured.headers['X-Learning-Space-ID'], 'self-space-1');
     expect(courses.single['code'], 'ielts-band-5-6');
+  });
+
+  test(
+    'lesson media progress includes the active lesson and media ids',
+    () async {
+      late http.Request captured;
+      final client =
+          ApiClient(
+              baseUrl: 'https://api.example.test',
+              client: MockClient((request) async {
+                captured = request;
+                return jsonResponse({
+                  'media_progress': {
+                    'media-1': {'position_seconds': 12},
+                  },
+                });
+              }),
+            )
+            ..accessToken = 'learner-token'
+            ..learningSpaceId = 'self-space-1';
+
+      await client.updateLessonMediaProgress(
+        lessonId: 'lesson-1',
+        mediaId: 'media-1',
+        positionSeconds: 12,
+        completed: false,
+      );
+
+      expect(captured.method, 'PATCH');
+      expect(
+        captured.url.path,
+        '/api/v1/content/lessons/lesson-1/media-progress',
+      );
+      expect(captured.headers['Authorization'], 'Bearer learner-token');
+      expect(captured.headers['X-Learning-Space-ID'], 'self-space-1');
+      expect(jsonDecode(captured.body), {
+        'media_id': 'media-1',
+        'position_seconds': 12,
+        'completed': false,
+      });
+    },
+  );
+
+  test('relative lesson media URLs resolve against the API base URL', () {
+    final client = ApiClient(baseUrl: 'https://api.example.test');
+
+    expect(
+      client.resolveMediaUrl('/api/v1/content/media/media-1/stream'),
+      'https://api.example.test/api/v1/content/media/media-1/stream',
+    );
+    expect(
+      client.resolveMediaUrl('https://cdn.example.test/audio.mp3'),
+      'https://cdn.example.test/audio.mp3',
+    );
   });
 }
 

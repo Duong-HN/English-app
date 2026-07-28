@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../core/api_client.dart';
 
@@ -18,11 +21,11 @@ class _CurriculumPageState extends State<CurriculumPage> {
   @override
   void initState() {
     super.initState();
-    _future = widget.apiClient.courses();
+    _future = widget.apiClient.courses(level: 'B1');
   }
 
   Future<void> _refresh() async {
-    final next = widget.apiClient.courses();
+    final next = widget.apiClient.courses(level: 'B1');
     setState(() => _future = next);
     await next;
   }
@@ -89,7 +92,7 @@ class _CurriculumPageState extends State<CurriculumPage> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Mỗi không gian tự học có tiến độ riêng. Chọn khóa theo level hoặc khóa IELTS theo band mục tiêu.',
+                  'MVP hiện tập trung vào khóa cầu nối A2 → B1. Mỗi không gian tự học có tiến độ riêng.',
                 ),
                 const SizedBox(height: 18),
                 ...courses.map(
@@ -186,9 +189,7 @@ class _CourseCard extends StatelessWidget {
                         title: Text(
                           'Bài ${lesson['lesson_number']}: ${lesson['title'] ?? ''}',
                         ),
-                        subtitle: Text(
-                          '${lesson['content_type'] ?? lesson['skill'] ?? ''} · ${lesson['duration_minutes'] ?? 0} phút',
-                        ),
+                        subtitle: Text(_lessonSummaryText(lesson)),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => onOpenLesson({
                           ...lesson,
@@ -222,9 +223,10 @@ class LessonPage extends StatefulWidget {
 
 class _LessonPageState extends State<LessonPage> {
   late Future<Map<String, dynamic>> _future;
-  AudioPlayer? _audioPlayer;
-  bool _playing = false;
+  late final TextEditingController _answerController;
   bool _saving = false;
+  bool _analyzing = false;
+  Map<String, dynamic>? _analysis;
   String? _error;
 
   String get _lessonId => widget.lessonSummary['id']?.toString() ?? '';
@@ -232,27 +234,46 @@ class _LessonPageState extends State<LessonPage> {
   @override
   void initState() {
     super.initState();
+    _answerController = TextEditingController();
     _future = widget.apiClient.lesson(_lessonId);
   }
 
   @override
   void dispose() {
-    _audioPlayer?.dispose();
+    _answerController.dispose();
     super.dispose();
   }
 
-  Future<void> _toggleAudio(String url) async {
+  Future<void> _analyzeLesson(Map<String, dynamic> lesson) async {
+    final inputText = _answerController.text.trim();
+    if (inputText.length < 3) {
+      setState(
+        () => _error = 'Hãy nhập ít nhất một câu trả lời trước khi gửi AI.',
+      );
+      return;
+    }
+    setState(() {
+      _analyzing = true;
+      _error = null;
+    });
+    final type = switch (lesson['skill']?.toString()) {
+      'writing' => 'writing',
+      'speaking' => 'speaking',
+      _ => 'reading',
+    };
     try {
-      _audioPlayer ??= AudioPlayer();
-      if (_playing) {
-        await _audioPlayer!.pause();
-      } else {
-        await _audioPlayer!.setUrl(url);
-        await _audioPlayer!.play();
-      }
-      if (mounted) setState(() => _playing = !_playing);
+      final response = await widget.apiClient.analyze(
+        type: type,
+        inputText: inputText,
+        lessonId: _lessonId,
+      );
+      if (mounted) setState(() => _analysis = response);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _error = exception.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Không thể phát audio của bài học.');
+      if (mounted) setState(() => _error = 'Không thể nhận phản hồi từ AI.');
+    } finally {
+      if (mounted) setState(() => _analyzing = false);
     }
   }
 
@@ -294,9 +315,30 @@ class _LessonPageState extends State<LessonPage> {
             return Center(child: Text(_errorText(snapshot.error)));
           }
           final lesson = snapshot.data ?? widget.lessonSummary;
-          final mediaUrl = lesson['media_url']?.toString();
+          final media = List<Map<String, dynamic>>.from(
+            _asMaps(lesson['media']),
+          );
+          final legacyUrl = lesson['media_url']?.toString();
+          if (media.isEmpty && legacyUrl != null && legacyUrl.isNotEmpty) {
+            media.add({
+              'id': 'legacy-media',
+              'media_type': lesson['content_type']?.toString() == 'video'
+                  ? 'video'
+                  : 'audio',
+              'title': 'Media bài học',
+              'media_url': legacyUrl,
+              'mime_type': lesson['content_type']?.toString() == 'video'
+                  ? 'video/mp4'
+                  : 'audio/mpeg',
+              'transcript': lesson['transcript'],
+            });
+          }
+          final progress = lesson['media_progress'] is Map
+              ? (lesson['media_progress'] as Map).map(
+                  (key, value) => MapEntry(key.toString(), value),
+                )
+              : <String, dynamic>{};
           final transcript = lesson['transcript']?.toString();
-          final isVideo = lesson['content_type']?.toString() == 'video';
           final completed =
               lesson['progress_status']?.toString() == 'completed';
           return ListView(
@@ -309,38 +351,25 @@ class _LessonPageState extends State<LessonPage> {
               const SizedBox(height: 8),
               Text(lesson['summary']?.toString() ?? ''),
               const SizedBox(height: 16),
-              if (mediaUrl != null && mediaUrl.isNotEmpty)
-                Card(
+              if (media.isEmpty)
+                const Card(
                   child: ListTile(
-                    leading: Icon(
-                      isVideo
-                          ? Icons.ondemand_video_outlined
-                          : Icons.headphones_outlined,
-                    ),
-                    title: Text(isVideo ? 'Video bài học' : 'Audio bài học'),
-                    subtitle: Text(mediaUrl),
-                    trailing: IconButton(
-                      tooltip: _playing ? 'Tạm dừng' : 'Phát',
-                      onPressed: () => _toggleAudio(mediaUrl),
-                      icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+                    leading: Icon(Icons.library_music_outlined),
+                    title: Text('Media đang được bổ sung'),
+                    subtitle: Text(
+                      'Bài học đã có nội dung; admin có thể gắn audio/video từ thư viện media.',
                     ),
                   ),
                 )
               else
-                Card(
-                  child: ListTile(
-                    leading: Icon(
-                      isVideo
-                          ? Icons.ondemand_video_outlined
-                          : Icons.library_music_outlined,
-                    ),
-                    title: Text(
-                      isVideo
-                          ? 'Video đang được bổ sung'
-                          : 'Audio đang được bổ sung',
-                    ),
-                    subtitle: Text(
-                      'Bài học đã có nội dung và transcript; media sẽ được gắn từ thư viện chuẩn.',
+                ...media.map(
+                  (item) => _LessonMediaCard(
+                    key: ValueKey(item['id']),
+                    apiClient: widget.apiClient,
+                    lessonId: _lessonId,
+                    media: item,
+                    initialPositionSeconds: _mediaPosition(
+                      progress[item['id']?.toString()],
                     ),
                   ),
                 ),
@@ -353,20 +382,102 @@ class _LessonPageState extends State<LessonPage> {
                   child: Text(lesson['body']?.toString() ?? ''),
                 ),
               ),
+              if (_asMap(lesson['content_pack']).isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _LessonActivityPack(
+                  contentPack: _asMap(lesson['content_pack']),
+                ),
+              ],
               if (transcript != null && transcript.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Text(
-                  'Transcript nghe',
+                  'Transcript bài học',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(transcript),
+                    child: SelectableText(transcript),
                   ),
                 ),
               ],
+              const SizedBox(height: 14),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Trợ lý AI theo bài học',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Nhập câu trả lời hoặc tóm tắt của bạn. AI sẽ dùng mục tiêu, nội dung và transcript của bài này để phản hồi.',
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const Key('lesson-ai-input'),
+                        controller: _answerController,
+                        minLines: 3,
+                        maxLines: 6,
+                        decoration: const InputDecoration(
+                          hintText: 'Viết câu trả lời bằng tiếng Anh…',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        key: const Key('lesson-ai-analyze'),
+                        onPressed: _analyzing
+                            ? null
+                            : () => _analyzeLesson(lesson),
+                        icon: _analyzing
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.auto_awesome_outlined),
+                        label: Text(
+                          _analyzing ? 'Đang phân tích…' : 'Nhờ AI nhận xét',
+                        ),
+                      ),
+                      if (_analysis?['result'] is Map) ...[
+                        const SizedBox(height: 14),
+                        Builder(
+                          builder: (context) {
+                            final result = (_analysis!['result'] as Map).map(
+                              (key, value) => MapEntry(key.toString(), value),
+                            );
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Divider(),
+                                Text(
+                                  result['summary']?.toString() ??
+                                      'Đã nhận phản hồi từ AI.',
+                                  key: const Key('lesson-ai-summary'),
+                                ),
+                                if (result['score'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      'Điểm formative: ${result['score']}/10',
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 Text(
@@ -396,12 +507,585 @@ class _LessonPageState extends State<LessonPage> {
   }
 }
 
+class _LessonActivityPack extends StatelessWidget {
+  const _LessonActivityPack({required this.contentPack});
+
+  final Map<String, dynamic> contentPack;
+
+  @override
+  Widget build(BuildContext context) {
+    final objectives = _asStrings(contentPack['objectives']);
+    final vocabulary = _asMaps(contentPack['vocabulary']);
+    final reading = _asMap(contentPack['reading']);
+    final listening = _asMap(contentPack['listening']);
+    final practice = _asMaps(contentPack['practice']);
+    final answerKey = _asMap(contentPack['answer_key']);
+    final speaking = _asMap(contentPack['speaking']);
+    final writing = _asMap(contentPack['writing']);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Practice pack',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            if (objectives.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Mục tiêu bài học',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              ...objectives.map(
+                (item) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.flag_outlined, size: 20),
+                  title: Text(item),
+                ),
+              ),
+            ],
+            if (vocabulary.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Từ vựng trọng tâm'),
+                children: vocabulary
+                    .map(
+                      (item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(item['word']?.toString() ?? ''),
+                        subtitle: Text(
+                          '${item['meaning'] ?? ''}\n${item['example'] ?? ''}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            _ActivitySection(title: 'Reading', data: reading),
+            _ActivitySection(title: 'Listening', data: listening),
+            if (practice.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Bài tập nhanh'),
+                children: practice
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 13,
+                          child: Text('${entry.key + 1}'),
+                        ),
+                        title: Text(entry.value['prompt']?.toString() ?? ''),
+                      ),
+                    )
+                    .toList(),
+              ),
+            _ResponseSection(title: 'Speaking', data: speaking),
+            _ResponseSection(title: 'Writing', data: writing),
+            if (answerKey.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Đáp án tham khảo'),
+                children: answerKey.entries
+                    .map(
+                      (entry) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_labelForKey(entry.key)),
+                        subtitle: Text(_asStrings(entry.value).join('\n')),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySection extends StatelessWidget {
+  const _ActivitySection({required this.title, required this.data});
+
+  final String title;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox.shrink();
+    final questions = _asMaps(data['questions']);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: Text(data['title']?.toString() ?? title),
+      children: [
+        if (data['instructions']?.toString().isNotEmpty == true)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(data['instructions'].toString()),
+            ),
+          ),
+        if (data['text']?.toString().isNotEmpty == true)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SelectableText(data['text'].toString()),
+          ),
+        ...questions.asMap().entries.map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${entry.key + 1}. ${entry.value['prompt'] ?? ''}'),
+                ..._asStrings(
+                  entry.value['options'],
+                ).map((option) => Text('• $option')),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResponseSection extends StatelessWidget {
+  const _ResponseSection({required this.title, required this.data});
+
+  final String title;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox.shrink();
+    final criteria = _asStrings(data['success_criteria']);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: Text(title),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(data['prompt']?.toString() ?? ''),
+        ),
+        if (criteria.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Tiêu chí hoàn thành: ${criteria.join(' · ')}'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LessonMediaCard extends StatelessWidget {
+  const _LessonMediaCard({
+    super.key,
+    required this.apiClient,
+    required this.lessonId,
+    required this.media,
+    required this.initialPositionSeconds,
+  });
+
+  final ApiClient apiClient;
+  final String lessonId;
+  final Map<String, dynamic> media;
+  final int initialPositionSeconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final isVideo = media['media_type']?.toString() == 'video';
+    if (isVideo) {
+      return _VideoMediaCard(
+        apiClient: apiClient,
+        lessonId: lessonId,
+        media: media,
+        initialPositionSeconds: initialPositionSeconds,
+      );
+    }
+    return _AudioMediaCard(
+      apiClient: apiClient,
+      lessonId: lessonId,
+      media: media,
+      initialPositionSeconds: initialPositionSeconds,
+    );
+  }
+}
+
+class _AudioMediaCard extends StatefulWidget {
+  const _AudioMediaCard({
+    required this.apiClient,
+    required this.lessonId,
+    required this.media,
+    required this.initialPositionSeconds,
+  });
+
+  final ApiClient apiClient;
+  final String lessonId;
+  final Map<String, dynamic> media;
+  final int initialPositionSeconds;
+
+  @override
+  State<_AudioMediaCard> createState() => _AudioMediaCardState();
+}
+
+class _AudioMediaCardState extends State<_AudioMediaCard> {
+  late final AudioPlayer _player;
+  Duration _position = Duration.zero;
+  bool _loaded = false;
+  bool _savedCompleted = false;
+  bool _loading = false;
+  String? _error;
+
+  String get _mediaId => widget.media['id']?.toString() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _position = Duration(seconds: widget.initialPositionSeconds);
+    _player.positionStream.listen((position) {
+      if (!mounted) return;
+      setState(() => _position = position);
+      final duration = _player.duration;
+      if (!_savedCompleted &&
+          duration != null &&
+          duration.inSeconds > 0 &&
+          position.inSeconds >= (duration.inSeconds * .8).round()) {
+        _savedCompleted = true;
+        _saveProgress(completed: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      if (_player.playing) {
+        await _player.pause();
+        await _saveProgress();
+      } else {
+        if (!_loaded) {
+          final url = widget.apiClient.resolveMediaUrl(
+            widget.media['media_url']?.toString() ?? '',
+          );
+          await _player.setUrl(url, headers: widget.apiClient.mediaHeaders());
+          if (widget.initialPositionSeconds > 0) {
+            await _player.seek(
+              Duration(seconds: widget.initialPositionSeconds),
+            );
+          }
+          _loaded = true;
+        }
+        await _player.play();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể phát audio của bài học.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveProgress({bool completed = false}) async {
+    if (_mediaId.isEmpty) return;
+    try {
+      await widget.apiClient.updateLessonMediaProgress(
+        lessonId: widget.lessonId,
+        mediaId: _mediaId,
+        positionSeconds: _position.inSeconds,
+        completed: completed,
+      );
+    } catch (_) {
+      // Playback should continue even when progress sync is temporarily offline.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = _player.duration;
+    final maxSeconds = duration?.inSeconds ?? 1;
+    final currentSeconds = _position.inSeconds.clamp(0, maxSeconds);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.headphones_outlined),
+              title: Text(widget.media['title']?.toString() ?? 'Audio bài học'),
+              subtitle: const Text('Audio bài học · tiến độ được lưu tự động'),
+              trailing: IconButton(
+                tooltip: _player.playing ? 'Tạm dừng' : 'Phát',
+                onPressed: _loading ? null : _toggle,
+                icon: _loading
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(_player.playing ? Icons.pause : Icons.play_arrow),
+              ),
+            ),
+            Slider(
+              value: currentSeconds.toDouble(),
+              max: maxSeconds.toDouble(),
+              onChanged: duration == null
+                  ? null
+                  : (value) {
+                      _player.seek(Duration(seconds: value.round()));
+                      setState(
+                        () => _position = Duration(seconds: value.round()),
+                      );
+                    },
+            ),
+            if (widget.media['transcript']?.toString().isNotEmpty == true)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Transcript'),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SelectableText(
+                      widget.media['transcript'].toString(),
+                    ),
+                  ),
+                ],
+              ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoMediaCard extends StatefulWidget {
+  const _VideoMediaCard({
+    required this.apiClient,
+    required this.lessonId,
+    required this.media,
+    required this.initialPositionSeconds,
+  });
+
+  final ApiClient apiClient;
+  final String lessonId;
+  final Map<String, dynamic> media;
+  final int initialPositionSeconds;
+
+  @override
+  State<_VideoMediaCard> createState() => _VideoMediaCardState();
+}
+
+class _VideoMediaCardState extends State<_VideoMediaCard> {
+  VideoPlayerController? _controller;
+  Future<void>? _initialization;
+  bool _savedCompleted = false;
+  String? _error;
+
+  String get _mediaId => widget.media['id']?.toString() ?? '';
+
+  Future<void> _start() async {
+    try {
+      if (_controller == null) {
+        final url = widget.apiClient.resolveMediaUrl(
+          widget.media['media_url']?.toString() ?? '',
+        );
+        final controller = VideoPlayerController.networkUrl(
+          Uri.parse(url),
+          httpHeaders: widget.apiClient.mediaHeaders(),
+        );
+        _controller = controller;
+        _initialization = controller.initialize();
+        await _initialization;
+        if (widget.initialPositionSeconds > 0) {
+          await controller.seekTo(
+            Duration(seconds: widget.initialPositionSeconds),
+          );
+        }
+        controller.addListener(_onVideoChanged);
+      }
+      await _controller!.play();
+      if (mounted) setState(() => _error = null);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Không thể phát video của bài học.');
+    }
+  }
+
+  void _onVideoChanged() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final duration = controller.value.duration;
+    final position = controller.value.position;
+    if (!_savedCompleted &&
+        duration.inSeconds > 0 &&
+        position.inSeconds >= (duration.inSeconds * .8).round()) {
+      _savedCompleted = true;
+      _saveProgress(completed: true);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _saveProgress({bool completed = false}) async {
+    final controller = _controller;
+    if (_mediaId.isEmpty || controller == null) return;
+    try {
+      await widget.apiClient.updateLessonMediaProgress(
+        lessonId: widget.lessonId,
+        mediaId: _mediaId,
+        positionSeconds: controller.value.position.inSeconds,
+        completed: completed,
+      );
+    } catch (_) {
+      // Playback should continue even when progress sync is temporarily offline.
+    }
+  }
+
+  @override
+  void dispose() {
+    final controller = _controller;
+    if (controller != null) {
+      controller.removeListener(_onVideoChanged);
+      unawaited(_saveProgress());
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final initialized = controller != null && controller.value.isInitialized;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.ondemand_video_outlined),
+              title: Text(widget.media['title']?.toString() ?? 'Video bài học'),
+              subtitle: const Text('Video bài học · tiến độ được lưu tự động'),
+              trailing: IconButton(
+                tooltip: initialized && controller.value.isPlaying
+                    ? 'Tạm dừng'
+                    : 'Phát',
+                onPressed: initialized
+                    ? () {
+                        if (controller.value.isPlaying) {
+                          controller.pause();
+                          _saveProgress();
+                        } else {
+                          controller.play();
+                        }
+                        setState(() {});
+                      }
+                    : _start,
+                icon: Icon(
+                  initialized && controller.value.isPlaying
+                      ? Icons.pause
+                      : Icons.play_arrow,
+                ),
+              ),
+            ),
+            if (_initialization != null && !initialized)
+              FutureBuilder<void>(
+                future: _initialization,
+                builder: (context, snapshot) => snapshot.hasError
+                    ? Text(
+                        'Không thể tải video.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      )
+                    : const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+              )
+            else if (initialized) ...[
+              AspectRatio(
+                aspectRatio: controller.value.aspectRatio == 0
+                    ? 16 / 9
+                    : controller.value.aspectRatio,
+                child: VideoPlayer(controller),
+              ),
+              VideoProgressIndicator(controller, allowScrubbing: true),
+            ],
+            if (widget.media['transcript']?.toString().isNotEmpty == true)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Transcript / caption'),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SelectableText(
+                      widget.media['transcript'].toString(),
+                    ),
+                  ),
+                ],
+              ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+int _mediaPosition(Object? value) {
+  if (value is! Map) return 0;
+  final raw = value['position_seconds'];
+  if (raw is num) return raw.round().clamp(0, 86400);
+  return int.tryParse(raw?.toString() ?? '')?.clamp(0, 86400) ?? 0;
+}
+
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is! Map) return const {};
+  return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+List<String> _asStrings(Object? value) {
+  if (value is! List) return const [];
+  return value.map((item) => item.toString()).toList();
+}
+
 List<Map<String, dynamic>> _asMaps(Object? value) {
   if (value is! List) return const [];
   return value.whereType<Map>().map((item) {
     return item.map((key, value) => MapEntry(key.toString(), value));
   }).toList();
 }
+
+String _labelForKey(String key) => switch (key) {
+  'reading' => 'Reading',
+  'listening' => 'Listening',
+  'practice' => 'Practice',
+  _ => key,
+};
 
 IconData _skillIcon(String? skill) => switch (skill?.toLowerCase()) {
   'reading' => Icons.menu_book_outlined,
@@ -415,4 +1099,13 @@ IconData _skillIcon(String? skill) => switch (skill?.toLowerCase()) {
 String _errorText(Object? error) {
   if (error is ApiException) return error.message;
   return 'Không thể tải nội dung giáo trình.';
+}
+
+String _lessonSummaryText(Map<String, dynamic> lesson) {
+  final mediaCount = lesson['media_count'] is num
+      ? (lesson['media_count'] as num).toInt()
+      : 0;
+  final mediaLabel = mediaCount > 0 ? ' · $mediaCount media' : '';
+  return '${lesson['content_type'] ?? lesson['skill'] ?? ''} · '
+      '${lesson['duration_minutes'] ?? 0} phút$mediaLabel';
 }

@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
+from ..content_catalog import recommended_course_code
 from ..db import get_db
 from ..dependencies import require_learner
 from ..learning_spaces import ensure_self_space, get_learning_space
@@ -255,7 +256,7 @@ async def complete_onboarding(
     )
     profile.onboarding_completed_at = utc_now()
     profile.updated_at = utc_now()
-    space.course_code = "ielts-band-5-6" if profile.goal == "ielts" else f"core-{placement.level.lower()}"
+    space.course_code = recommended_course_code(placement.level, profile.goal)
     space.current_level = placement.level
     space.goal = profile.goal
     space.daily_minutes = profile.daily_minutes
