@@ -92,6 +92,24 @@ API -> Database: enforce RBAC, mutate/query, append audit record
 API -> Web: operational data or structured API Console response
 ```
 
+Teacher and administrator web access share one portal but use role-based entry points:
+
+```text
+Teacher -> Mobile Settings: switch to teacher mode
+Mobile -> Teacher mode: show overview and web-dashboard handoff
+Teacher -> Web: sign in with the same account
+Web -> API: login and server-validated teacher role
+Teacher -> Web: create class, assign work, review submissions and save feedback
+
+Admin -> Web: sign in with the administrator account
+Web -> API: login and server-validated admin role
+Admin -> Web: manage users, teacher applications, content, moderation and audit data
+```
+
+Learner accounts are intentionally limited to the mobile learning experience. A teacher account can still switch back
+to learner mode on mobile and use the same account to study or complete learner-facing class work. The mobile teacher
+screen is not a second native implementation of the full web dashboard.
+
 ## Database
 
 ### users
