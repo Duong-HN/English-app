@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "course": {
+    "code": "core-b1",
+    "title": "English A2 → B1 · Everyday Communication",
+    "description": "Khóa cầu nối sáu bài học giúp người học A2 sử dụng tiếng Anh tự tin hơn trong kế hoạch, thói quen, yêu cầu lịch sự và giải quyết vấn đề hằng ngày.",
+    "kind": "core",
+    "level": "B1",
+    "band_min": null,
+    "band_max": null,
+    "units": [
+      {
+        "unit_number": 1,
+        "title": "Plans, routines and healthy choices",
+        "objective": "Nói về kế hoạch, thói quen và những thay đổi nhỏ trong đời sống bằng câu rõ ràng hơn.",
+        "lesson_keys": ["weekly-plans", "healthy-routines", "changing-a-plan"]
+      },
+      {
+        "unit_number": 2,
+        "title": "Requests, choices and solutions",
+        "objective": "Đưa ra yêu cầu lịch sự, so sánh lựa chọn và trình bày cách giải quyết một vấn đề nhỏ.",
+        "lesson_keys": ["polite-requests", "compare-options", "solve-small-problem"]
+      }
+    ],
+    "lessons": [
+      {
+        "key": "weekly-plans",
+        "lesson_number": 1,
+        "title": "Making plans for the week",
+        "skill": "speaking",
+        "content_type": "speaking",
+        "summary": "Dùng present continuous, be going to và will để nói về kế hoạch trong tuần.",
+        "body": "Plan a realistic week with a partner. Notice the difference between a fixed arrangement (I’m meeting…), an intention (I’m going to…) and a decision made now (I’ll…). Finish by making one clear invitation.",
+        "transcript": "Mia: Are you free on Thursday evening?\nJon: I’m meeting my cousin after work, but I’m free on Friday.\nMia: Great. I’m going to try the new food market. Would you like to come?\nJon: Yes, I’d love to. I’ll check the train times tonight.",
+        "duration_minutes": 20,
+        "source_attribution": "Original LearnMate A2→B1 content pack, written for the graduation-project MVP.",
+        "license_name": "Original project content; internal demo use",
+        "content_pack": {
+          "objectives": [
+            "Nói về một lịch hẹn đã sắp xếp.",
+            "Phân biệt ý định và quyết định phát sinh trong lúc nói.",
+            "Mời bạn và xác nhận thời gian, địa điểm rõ ràng."
+          ],
+          "vocabulary": [
+            {"word": "arrange", "meaning": "sắp xếp", "example": "We arranged a meeting for Friday."},
+            {"word": "available", "meaning": "rảnh, có thể tham gia", "example": "Are you available after six?"},
+            {"word": "reschedule", "meaning": "đổi lịch", "example": "Can we reschedule the appointment?"},
+            {"word": "check the times", "meaning": "kiểm tra giờ", "example": "I’ll check the train times tonight."}
+          ],
+          "reading": {
+            "title": "Read the chat",
+            "text": "Linh: I’m working from home on Tuesday, so I’m free at lunchtime.\nSam: I’m going to visit the library on Tuesday. Shall we study together?\nLinh: I’d like to, but I have a dentist appointment at one.\nSam: No problem. I’ll reserve a table for Wednesday morning instead.",
+            "questions": [
+              {"prompt": "When is Linh free at lunchtime?", "options": ["Monday", "Tuesday", "Wednesday", "Friday"]},
+              {"prompt": "Why can’t Linh study at one on Tuesday?", "options": ["She is working.", "She is travelling.", "She has a dentist appointment.", "She is meeting Sam."]}
+            ]
+          },
+          "listening": {
+            "title": "Listen for the type of plan",
+            "instructions": "Nghe transcript hai lần. Gạch chân một câu là arrangement, một câu là intention và một câu là instant decision.",
+            "questions": [
+              {"prompt": "What is Jon doing on Thursday?", "options": ["Meeting his cousin", "Going to the market", "Checking train times", "Working at home"]},
+              {"prompt": "What will Jon do tonight?", "options": ["Book a table", "Check train times", "Call his cousin", "Buy food"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Choose: I ___ my manager at ten tomorrow. (meet / am meeting)", "answer": "am meeting"},
+            {"prompt": "Choose: I’m tired. I think I ___ home early. (will go / am going)", "answer": "will go"},
+            {"prompt": "Write one polite invitation using Would you like to…?", "answer": "Open response; check a clear activity and time."
+            }
+          ],
+          "answer_key": {
+            "reading": ["Tuesday", "She has a dentist appointment."],
+            "listening": ["Meeting his cousin", "Check train times"],
+            "practice": ["am meeting", "will go", "Open response"]
+          },
+          "speaking": {
+            "prompt": "Invite a classmate to do something next week. Agree on a day, time and place, then change one detail politely.",
+            "success_criteria": ["Nêu đủ ngày và giờ", "Dùng ít nhất hai cấu trúc nói về tương lai", "Phản hồi được khi kế hoạch thay đổi"]
+          },
+          "writing": {
+            "prompt": "Write a 60–80 word message inviting a friend to an activity next week.",
+            "success_criteria": ["Có lời mời rõ ràng", "Có thời gian và địa điểm", "Kết thúc bằng câu hỏi xác nhận"]
+          },
+          "media_plan": null
+        }
+      },
+      {
+        "key": "healthy-routines",
+        "lesson_number": 2,
+        "title": "Small changes, better routines",
+        "skill": "reading",
+        "content_type": "reading",
+        "summary": "Đọc về những thay đổi nhỏ trong thói quen và dùng từ vựng để mô tả lối sống cân bằng.",
+        "body": "Read about a student who changes one habit at a time. Identify the main idea, supporting details and useful words for frequency, food and rest. Then write one realistic change for your own week.",
+        "transcript": "Nora used to skip breakfast when she was busy. Now she prepares fruit and yoghurt the night before. She also walks for twenty minutes after lunch. These changes are small, but she has more energy in the afternoon and sleeps better at night.",
+        "duration_minutes": 20,
+        "source_attribution": "Original LearnMate A2→B1 content pack, written for the graduation-project MVP.",
+        "license_name": "Original project content; internal demo use",
+        "content_pack": {
+          "objectives": [
+            "Tìm ý chính và chi tiết hỗ trợ trong một đoạn đọc ngắn.",
+            "Dùng used to, hiện tại đơn và trạng từ tần suất để mô tả thói quen.",
+            "Viết một thay đổi nhỏ có thể thực hiện trong tuần này."
+          ],
+          "vocabulary": [
+            {"word": "skip breakfast", "meaning": "bỏ bữa sáng", "example": "I used to skip breakfast on busy days."},
+            {"word": "balanced", "meaning": "cân bằng", "example": "A balanced meal can include vegetables and protein."},
+            {"word": "habit", "meaning": "thói quen", "example": "Walking after lunch is a healthy habit."},
+            {"word": "energy", "meaning": "năng lượng", "example": "I have more energy in the afternoon."}
+          ],
+          "reading": {
+            "title": "One change at a time",
+            "text": "Nora used to skip breakfast when she was busy. She thought saving ten minutes would help her finish more work, but she often felt tired before lunch. Now she prepares fruit and yoghurt the night before. She also walks for twenty minutes after lunch instead of checking her phone immediately. These changes are small, but Nora has more energy in the afternoon and sleeps better at night. She says the important point is not to change everything at once: a simple habit is easier to repeat.",
+            "questions": [
+              {"prompt": "Why did Nora skip breakfast?", "options": ["She disliked fruit.", "She wanted to save time.", "She wanted to sleep better.", "She walked after lunch."]},
+              {"prompt": "What does Nora do after lunch now?", "options": ["She checks her phone.", "She goes to sleep.", "She walks for twenty minutes.", "She prepares yoghurt."]},
+              {"prompt": "What is the main idea?", "options": ["Big changes are always faster.", "A small repeatable change can improve a routine.", "Breakfast is the only important meal.", "Phones help people sleep better."]}
+            ]
+          },
+          "listening": {
+            "title": "Listen for the before-and-after details",
+            "instructions": "Nghe transcript và ghi lại một thói quen cũ, một thói quen mới và một kết quả.",
+            "questions": [
+              {"prompt": "What did Nora often skip?", "options": ["Lunch", "Breakfast", "Dinner", "A walk"]},
+              {"prompt": "How long does she walk?", "options": ["Ten minutes", "Fifteen minutes", "Twenty minutes", "One hour"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Complete: I ___ play games late, but now I go to bed earlier. (used to / use to)", "answer": "used to"},
+            {"prompt": "Complete: She ___ drinks water before class. (usually / is usually)", "answer": "usually"},
+            {"prompt": "Rewrite with because: I prepare lunch the night before. Mornings are busy.", "answer": "I prepare lunch the night before because mornings are busy."
+            }
+          ],
+          "answer_key": {
+            "reading": ["She wanted to save time.", "She walks for twenty minutes.", "A small repeatable change can improve a routine."],
+            "listening": ["Breakfast", "Twenty minutes"],
+            "practice": ["used to", "usually", "I prepare lunch the night before because mornings are busy."]
+          },
+          "speaking": {
+            "prompt": "Describe one habit you used to have and one small change you want to make. Explain why.",
+            "success_criteria": ["Dùng used to hoặc now", "Nêu được lý do", "Nói trong 45–60 giây"]
+          },
+          "writing": {
+            "prompt": "Write 80–100 words about a small routine change. Include the old habit, the new habit and one expected result.",
+            "success_criteria": ["Có before-and-after rõ ràng", "Dùng because hoặc so để nối ý", "Có một kết quả cụ thể"]
+          },
+          "media_plan": null
+        }
+      },
+      {
+        "key": "changing-a-plan",
+        "lesson_number": 3,
+        "title": "Changing a plan politely",
+        "skill": "listening",
+        "content_type": "video",
+        "summary": "Nghe/xem một cuộc hội thoại ngắn, nhận ra lý do đổi kế hoạch và đưa ra lời thay thế.",
+        "body": "Watch the short original scene. A delayed bus changes two friends’ plan. Notice how they explain the problem, apologise briefly and suggest a new time instead of simply cancelling.",
+        "transcript": "Mai: I’m sorry, but I’m still on the bus. There’s heavy traffic near the bridge.\nLeo: That’s okay. Do you know when you’ll arrive?\nMai: Maybe in thirty minutes. Could we meet at seven instead?\nLeo: Seven works for me. I’ll wait outside the café.\nMai: Thanks. I’ll text you when I get off the bus.",
+        "duration_minutes": 18,
+        "source_attribution": "Original LearnMate A2→B1 content pack and original recording script.",
+        "license_name": "Original project content; project-owned video recording required",
+        "content_pack": {
+          "objectives": [
+            "Nhận ra vấn đề và thời gian mới trong hội thoại.",
+            "Dùng lời xin lỗi, could we…? và I’ll… để đổi kế hoạch lịch sự.",
+            "Tóm tắt lại một cuộc hội thoại ngắn sau khi xem video."
+          ],
+          "vocabulary": [
+            {"word": "heavy traffic", "meaning": "giao thông đông/ùn tắc", "example": "There is heavy traffic near the bridge."},
+            {"word": "arrive", "meaning": "đến nơi", "example": "What time will you arrive?"},
+            {"word": "work for me", "meaning": "phù hợp với tôi", "example": "Seven works for me."},
+            {"word": "get off", "meaning": "xuống xe", "example": "I’ll call you when I get off the bus."}
+          ],
+          "reading": {
+            "title": "A short message",
+            "text": "Hi Leo, I’m sorry, but the bus is delayed because of traffic. I may arrive at 7:00. Could we meet at the café then? I’ll send another message when I get off the bus. Thanks for understanding.",
+            "questions": [
+              {"prompt": "Why is the person late?", "options": ["The café is closed.", "The bus is delayed.", "The bridge is closed tomorrow.", "The person forgot the plan."]},
+              {"prompt": "What new time is suggested?", "options": ["Six o’clock", "Six thirty", "Seven o’clock", "Eight o’clock"]}
+            ]
+          },
+          "listening": {
+            "title": "Watch and listen",
+            "instructions": "Xem video/đọc transcript hai lần. Lần đầu tìm vấn đề; lần hai ghi lại thời gian mới và lời hứa cập nhật.",
+            "questions": [
+              {"prompt": "What causes the delay?", "options": ["Rain", "Heavy traffic", "A broken phone", "A closed café"]},
+              {"prompt": "Where will Leo wait?", "options": ["At the station", "On the bus", "Outside the café", "Near the bridge"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Make this polite: Change the time to seven.", "answer": "Could we meet at seven instead?"},
+            {"prompt": "Complete: I’m sorry, but I ___ arrive late. (may / am may)", "answer": "may"},
+            {"prompt": "Choose the best reply: ‘Seven works for me.’", "answer": "Thanks. I’ll text you when I arrive."
+            }
+          ],
+          "answer_key": {
+            "reading": ["The bus is delayed.", "Seven o’clock"],
+            "listening": ["Heavy traffic", "Outside the café"],
+            "practice": ["Could we meet at seven instead?", "may", "Thanks. I’ll text you when I arrive."]
+          },
+          "speaking": {
+            "prompt": "Role-play a changed plan: explain a delay, apologise, suggest a new time and confirm how you will update the other person.",
+            "success_criteria": ["Nêu nguyên nhân dễ hiểu", "Đưa ra thời gian thay thế", "Dùng lời nói lịch sự"]
+          },
+          "writing": {
+            "prompt": "Write a 50–70 word message to change an appointment because you are delayed.",
+            "success_criteria": ["Có lời xin lỗi", "Giải thích ngắn gọn", "Đề xuất thời gian mới"]
+          },
+          "media_plan": {
+            "asset_key": "a2b1-changing-a-plan",
+            "media_type": "video",
+            "title": "Changing a plan politely",
+            "duration_seconds": 90,
+            "source": "Original project recording; no external asset",
+            "license": "Project-owned recording",
+            "recording_note": "Quay hai thành viên của nhóm ở bến xe/quán cà phê; dùng transcript ở trên làm thoại và thêm caption tiếng Anh."
+          }
+        }
+      },
+      {
+        "key": "polite-requests",
+        "lesson_number": 1,
+        "title": "Making polite requests",
+        "skill": "speaking",
+        "content_type": "video",
+        "summary": "Dùng Could you…?, Would you mind…? và I’d appreciate it if… trong tình huống học tập và công việc.",
+        "body": "Watch the original office scene and practise asking for help without sounding too direct. Compare a direct request with a polite request, then write a short follow-up message.",
+        "transcript": "An: Could you send me the meeting notes, please?\nBinh: Sure. Would you like them before lunch?\nAn: Yes, please. I’d appreciate it if you could include the action points.\nBinh: No problem. I’ll send them by eleven.",
+        "duration_minutes": 18,
+        "source_attribution": "Original LearnMate A2→B1 content pack and original recording script.",
+        "license_name": "Original project content; project-owned video recording required",
+        "content_pack": {
+          "objectives": [
+            "Chuyển một yêu cầu trực tiếp thành yêu cầu lịch sự.",
+            "Hỏi lại deadline và xác nhận việc cần làm.",
+            "Viết tin nhắn follow-up ngắn và rõ ràng."
+          ],
+          "vocabulary": [
+            {"word": "meeting notes", "meaning": "ghi chú cuộc họp", "example": "Could you send me the meeting notes?"},
+            {"word": "action point", "meaning": "việc cần thực hiện sau cuộc họp", "example": "Please include the action points."},
+            {"word": "deadline", "meaning": "hạn chót", "example": "What is the deadline for this task?"},
+            {"word": "appreciate", "meaning": "đánh giá cao, cảm kích", "example": "I’d appreciate it if you could help."}
+          ],
+          "reading": {
+            "title": "A helpful email",
+            "text": "Hi Thu, Could you check the first page of my report when you have time? I’d appreciate it if you could look at the introduction and tell me whether the main idea is clear. There is no rush, but feedback before Friday would be very helpful. Thanks, Nam.",
+            "questions": [
+              {"prompt": "What does Nam ask Thu to check?", "options": ["The whole project budget", "The first page of his report", "A meeting room", "A Friday deadline"]},
+              {"prompt": "When would feedback be helpful?", "options": ["Before Friday", "After the weekend", "At lunchtime today", "Next month"]}
+            ]
+          },
+          "listening": {
+            "title": "Watch the request",
+            "instructions": "Xác định người yêu cầu, tài liệu cần gửi và deadline trong video/ transcript.",
+            "questions": [
+              {"prompt": "What does An ask Binh to send?", "options": ["A report", "Meeting notes", "A timetable", "A presentation"]},
+              {"prompt": "What should the notes include?", "options": ["Prices", "Action points", "Photos", "A new deadline"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Make polite: Send me the file.", "answer": "Could you send me the file, please?"},
+            {"prompt": "Complete: Would you mind ___ the door? (close)", "answer": "closing"},
+            {"prompt": "Choose: I’d appreciate it if you ___ reply by Friday. (could / can)", "answer": "could"
+            }
+          ],
+          "answer_key": {
+            "reading": ["The first page of his report", "Before Friday"],
+            "listening": ["Meeting notes", "Action points"],
+            "practice": ["Could you send me the file, please?", "closing", "could"]
+          },
+          "speaking": {
+            "prompt": "Ask a classmate or colleague for help with a task. State what you need, ask for a deadline and thank them.",
+            "success_criteria": ["Dùng một mẫu câu lịch sự", "Nói rõ tài liệu/công việc", "Xác nhận thời hạn"]
+          },
+          "writing": {
+            "prompt": "Write a 70–90 word email asking for feedback on a short report.",
+            "success_criteria": ["Có lời chào và lời cảm ơn", "Nêu rõ phần cần góp ý", "Đưa ra thời hạn hợp lý"]
+          },
+          "media_plan": {
+            "asset_key": "a2b1-polite-requests",
+            "media_type": "video",
+            "title": "Making polite requests",
+            "duration_seconds": 90,
+            "source": "Original project recording; no external asset",
+            "license": "Project-owned recording",
+            "recording_note": "Quay cảnh hai thành viên trao đổi về ghi chú cuộc họp; thêm phụ đề tiếng Anh và một frame giải thích ba mẫu câu."
+          }
+        }
+      },
+      {
+        "key": "compare-options",
+        "lesson_number": 2,
+        "title": "Comparing everyday options",
+        "skill": "writing",
+        "content_type": "writing",
+        "summary": "So sánh hai lựa chọn, nêu lý do và đưa ra khuyến nghị ngắn.",
+        "body": "Compare two ways to travel to work or school. Use comparative forms, because, although and in my view to move from separate sentences to a connected recommendation.",
+        "transcript": "The bus is cheaper than the train, but it is usually slower. The train is more reliable during the morning rush hour. Although the ticket costs more, it may be a better choice when arriving on time is important.",
+        "duration_minutes": 20,
+        "source_attribution": "Original LearnMate A2→B1 content pack, written for the graduation-project MVP.",
+        "license_name": "Original project content; internal demo use",
+        "content_pack": {
+          "objectives": [
+            "Dùng comparative adjectives để so sánh hai lựa chọn.",
+            "Nối ưu điểm và hạn chế bằng but, although và because.",
+            "Viết một khuyến nghị có lý do cụ thể."
+          ],
+          "vocabulary": [
+            {"word": "reliable", "meaning": "đáng tin cậy", "example": "The train is more reliable in the morning."},
+            {"word": "rush hour", "meaning": "giờ cao điểm", "example": "Traffic is heavy during rush hour."},
+            {"word": "convenient", "meaning": "thuận tiện", "example": "The bus stop is more convenient for me."},
+            {"word": "recommend", "meaning": "đề xuất, khuyến nghị", "example": "I recommend the train for an early meeting."}
+          ],
+          "reading": {
+            "title": "Bus or train?",
+            "text": "The bus from Green Street is cheaper and stops close to Mai’s home. However, it can be slow during rush hour. The train costs more, but it is faster and more reliable. Mai usually takes the bus when she has time. When she has an important morning meeting, she chooses the train because arriving on time matters more than saving a little money.",
+            "questions": [
+              {"prompt": "What is one advantage of the bus?", "options": ["It is faster.", "It is cheaper.", "It is always on time.", "It costs more."]},
+              {"prompt": "When does Mai choose the train?", "options": ["When she wants to save money", "When she has an important morning meeting", "When the bus stop is close", "When she is not in a hurry"]},
+              {"prompt": "Why does she choose the train then?", "options": ["She likes long journeys.", "The train is more comfortable at night.", "Arriving on time is important.", "The bus is closed."]}
+            ]
+          },
+          "listening": {
+            "title": "Listen for the recommendation",
+            "instructions": "Nghe transcript và ghi lại lựa chọn nào rẻ hơn, lựa chọn nào đáng tin cậy hơn và khi nào nên chọn tàu.",
+            "questions": [
+              {"prompt": "Which option is cheaper?", "options": ["The bus", "The train", "Both", "Neither"]},
+              {"prompt": "Which option may be better when time matters?", "options": ["The bus", "The train", "Walking", "Cycling"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Complete: The train is ___ (fast) than the bus.", "answer": "faster"},
+            {"prompt": "Join with although: The ticket costs more. The train is reliable.", "answer": "Although the ticket costs more, the train is reliable."},
+            {"prompt": "Choose: I recommend the bus ___ it is cheaper. (because / although)", "answer": "because"
+            }
+          ],
+          "answer_key": {
+            "reading": ["It is cheaper.", "When she has an important morning meeting", "Arriving on time is important."],
+            "listening": ["The bus", "The train"],
+            "practice": ["faster", "Although the ticket costs more, the train is reliable.", "because"]
+          },
+          "speaking": {
+            "prompt": "Compare two ways to travel, study or shop. Recommend one option and give two reasons.",
+            "success_criteria": ["Dùng ít nhất hai tính từ so sánh", "Nêu hai lý do", "Có khuyến nghị rõ ràng"]
+          },
+          "writing": {
+            "prompt": "Write 100–120 words recommending one of two transport options to a friend.",
+            "success_criteria": ["Có mở bài nêu hai lựa chọn", "So sánh ưu/nhược điểm", "Kết luận bằng recommendation"]
+          },
+          "media_plan": null
+        }
+      },
+      {
+        "key": "solve-small-problem",
+        "lesson_number": 3,
+        "title": "Solving a small problem",
+        "skill": "speaking",
+        "content_type": "video",
+        "summary": "Mô tả vấn đề, đề xuất giải pháp và thống nhất bước tiếp theo trong một tình huống đời thường.",
+        "body": "Watch the original scene in which a learner cannot open a shared document. Listen for the problem, the proposed solution and the final confirmation. Then solve a similar problem with a partner.",
+        "transcript": "Lan: I can’t open the shared document. It says I need permission.\nMinh: Let me check the link. It looks like the old version.\nLan: Should I send you my email again?\nMinh: Yes, please. I’ll update the permission and send a new link.\nLan: Great. I’ll try it now and tell you if it works.",
+        "duration_minutes": 18,
+        "source_attribution": "Original LearnMate A2→B1 content pack and original recording script.",
+        "license_name": "Original project content; project-owned video recording required",
+        "content_pack": {
+          "objectives": [
+            "Mô tả một vấn đề kỹ thuật/đời thường bằng câu ngắn rõ ràng.",
+            "Đề xuất giải pháp với Let me…, Should I…? và I’ll… .",
+            "Xác nhận kết quả và bước tiếp theo."
+          ],
+          "vocabulary": [
+            {"word": "permission", "meaning": "quyền truy cập", "example": "The document says I need permission."},
+            {"word": "shared document", "meaning": "tài liệu được chia sẻ", "example": "We work in a shared document."},
+            {"word": "version", "meaning": "phiên bản", "example": "This looks like the old version."},
+            {"word": "update", "meaning": "cập nhật", "example": "I’ll update the permission."}
+          ],
+          "reading": {
+            "title": "A simple solution",
+            "text": "When Bao could not join the online class, he first checked his internet connection. The connection was fine, so he closed the app and opened it again. The problem continued. His teacher sent a new meeting link, and Bao joined successfully. He wrote the new link in his notebook so he could find it later.",
+            "questions": [
+              {"prompt": "What did Bao check first?", "options": ["His notebook", "The teacher’s camera", "His internet connection", "A new app"]},
+              {"prompt": "What solved the problem?", "options": ["He bought a new computer.", "The teacher sent a new link.", "He cancelled the class.", "He changed his password."]}
+            ]
+          },
+          "listening": {
+            "title": "Watch the problem-solving steps",
+            "instructions": "Ghi lại: vấn đề là gì, Minh kiểm tra gì, Lan cần gửi lại thông tin nào và kết quả mong đợi.",
+            "questions": [
+              {"prompt": "What does Lan need?", "options": ["Permission", "A train ticket", "A new laptop", "A meeting room"]},
+              {"prompt": "What will Minh send?", "options": ["A new link", "A password", "A report", "An email address"]}
+            ]
+          },
+          "practice": [
+            {"prompt": "Complete: ___ me check the link. (Let / Lets)", "answer": "Let"},
+            {"prompt": "Choose: ___ I send you the file again? (Should / Am)", "answer": "Should"},
+            {"prompt": "Complete: I’ll ___ the permission. (update / updating)", "answer": "update"
+            }
+          ],
+          "answer_key": {
+            "reading": ["His internet connection", "The teacher sent a new link."],
+            "listening": ["Permission", "A new link"],
+            "practice": ["Let", "Should", "update"]
+          },
+          "speaking": {
+            "prompt": "Role-play a problem with a file, booking or class. Explain the problem, suggest two steps and confirm what will happen next.",
+            "success_criteria": ["Mô tả đúng vấn đề", "Dùng Let me hoặc Should I", "Xác nhận bước tiếp theo"]
+          },
+          "writing": {
+            "prompt": "Write a 70–90 word support message explaining a small problem and suggesting a solution.",
+            "success_criteria": ["Mô tả vấn đề bằng quá khứ/hiện tại phù hợp", "Có ít nhất một đề xuất", "Kết thúc bằng bước tiếp theo"]
+          },
+          "media_plan": {
+            "asset_key": "a2b1-solve-small-problem",
+            "media_type": "video",
+            "title": "Solving a small problem",
+            "duration_seconds": 100,
+            "source": "Original project recording; no external asset",
+            "license": "Project-owned recording",
+            "recording_note": "Quay màn hình tài liệu chia sẻ và hai thành viên xử lý lỗi quyền truy cập; thêm caption tiếng Anh."
+          }
+        }
+      }
+    ]
+  }
+}

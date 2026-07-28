@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from ..config import Settings, get_settings
-from ..content_catalog import ensure_catalog
+from ..content_catalog import FOCUSED_COURSE_CODE, ensure_catalog
 from ..db import get_db
 from ..dependencies import get_current_user, require_admin
 from ..learning_spaces import get_learning_space
@@ -167,6 +167,9 @@ def _lesson_response(
         summary=lesson.summary,
         body=lesson.body,
         transcript=lesson.transcript,
+        content_pack=lesson.content_pack or {},
+        source_attribution=lesson.source_attribution,
+        license_name=lesson.license_name,
         media_url=legacy_media_url,
         media=media,
         duration_minutes=lesson.duration_minutes,
@@ -218,7 +221,11 @@ def list_courses(
     if kind:
         statement = statement.where(Course.kind == kind)
     if level:
-        statement = statement.where(Course.level == level.upper())
+        normalized_level = level.upper()
+        if normalized_level in {"A2", "B1"}:
+            statement = statement.where(Course.code == FOCUSED_COURSE_CODE)
+        else:
+            statement = statement.where(Course.level == normalized_level)
     rows = db.execute(statement.order_by(Course.kind, Course.level, Course.code)).unique().scalars().all()
     progress = _progress_by_lesson(db, space)
     return CourseListResponse(

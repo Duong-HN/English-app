@@ -21,11 +21,11 @@ class _CurriculumPageState extends State<CurriculumPage> {
   @override
   void initState() {
     super.initState();
-    _future = widget.apiClient.courses();
+    _future = widget.apiClient.courses(level: 'B1');
   }
 
   Future<void> _refresh() async {
-    final next = widget.apiClient.courses();
+    final next = widget.apiClient.courses(level: 'B1');
     setState(() => _future = next);
     await next;
   }
@@ -92,7 +92,7 @@ class _CurriculumPageState extends State<CurriculumPage> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Mỗi không gian tự học có tiến độ riêng. Chọn khóa theo level hoặc khóa IELTS theo band mục tiêu.',
+                  'MVP hiện tập trung vào khóa cầu nối A2 → B1. Mỗi không gian tự học có tiến độ riêng.',
                 ),
                 const SizedBox(height: 18),
                 ...courses.map(
@@ -382,6 +382,12 @@ class _LessonPageState extends State<LessonPage> {
                   child: Text(lesson['body']?.toString() ?? ''),
                 ),
               ),
+              if (_asMap(lesson['content_pack']).isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _LessonActivityPack(
+                  contentPack: _asMap(lesson['content_pack']),
+                ),
+              ],
               if (transcript != null && transcript.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Text(
@@ -497,6 +503,182 @@ class _LessonPageState extends State<LessonPage> {
           );
         },
       ),
+    );
+  }
+}
+
+class _LessonActivityPack extends StatelessWidget {
+  const _LessonActivityPack({required this.contentPack});
+
+  final Map<String, dynamic> contentPack;
+
+  @override
+  Widget build(BuildContext context) {
+    final objectives = _asStrings(contentPack['objectives']);
+    final vocabulary = _asMaps(contentPack['vocabulary']);
+    final reading = _asMap(contentPack['reading']);
+    final listening = _asMap(contentPack['listening']);
+    final practice = _asMaps(contentPack['practice']);
+    final answerKey = _asMap(contentPack['answer_key']);
+    final speaking = _asMap(contentPack['speaking']);
+    final writing = _asMap(contentPack['writing']);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Practice pack',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            if (objectives.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Mục tiêu bài học',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              ...objectives.map(
+                (item) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: const Icon(Icons.flag_outlined, size: 20),
+                  title: Text(item),
+                ),
+              ),
+            ],
+            if (vocabulary.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Từ vựng trọng tâm'),
+                children: vocabulary
+                    .map(
+                      (item) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(item['word']?.toString() ?? ''),
+                        subtitle: Text(
+                          '${item['meaning'] ?? ''}\n${item['example'] ?? ''}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            _ActivitySection(title: 'Reading', data: reading),
+            _ActivitySection(title: 'Listening', data: listening),
+            if (practice.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Bài tập nhanh'),
+                children: practice
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 13,
+                          child: Text('${entry.key + 1}'),
+                        ),
+                        title: Text(entry.value['prompt']?.toString() ?? ''),
+                      ),
+                    )
+                    .toList(),
+              ),
+            _ResponseSection(title: 'Speaking', data: speaking),
+            _ResponseSection(title: 'Writing', data: writing),
+            if (answerKey.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Đáp án tham khảo'),
+                children: answerKey.entries
+                    .map(
+                      (entry) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_labelForKey(entry.key)),
+                        subtitle: Text(_asStrings(entry.value).join('\n')),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySection extends StatelessWidget {
+  const _ActivitySection({required this.title, required this.data});
+
+  final String title;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox.shrink();
+    final questions = _asMaps(data['questions']);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: Text(data['title']?.toString() ?? title),
+      children: [
+        if (data['instructions']?.toString().isNotEmpty == true)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(data['instructions'].toString()),
+            ),
+          ),
+        if (data['text']?.toString().isNotEmpty == true)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SelectableText(data['text'].toString()),
+          ),
+        ...questions.asMap().entries.map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${entry.key + 1}. ${entry.value['prompt'] ?? ''}'),
+                ..._asStrings(
+                  entry.value['options'],
+                ).map((option) => Text('• $option')),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResponseSection extends StatelessWidget {
+  const _ResponseSection({required this.title, required this.data});
+
+  final String title;
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox.shrink();
+    final criteria = _asStrings(data['success_criteria']);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: Text(title),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(data['prompt']?.toString() ?? ''),
+        ),
+        if (criteria.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Tiêu chí hoàn thành: ${criteria.join(' · ')}'),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -881,12 +1063,29 @@ int _mediaPosition(Object? value) {
   return int.tryParse(raw?.toString() ?? '')?.clamp(0, 86400) ?? 0;
 }
 
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is! Map) return const {};
+  return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+List<String> _asStrings(Object? value) {
+  if (value is! List) return const [];
+  return value.map((item) => item.toString()).toList();
+}
+
 List<Map<String, dynamic>> _asMaps(Object? value) {
   if (value is! List) return const [];
   return value.whereType<Map>().map((item) {
     return item.map((key, value) => MapEntry(key.toString(), value));
   }).toList();
 }
+
+String _labelForKey(String key) => switch (key) {
+  'reading' => 'Reading',
+  'listening' => 'Listening',
+  'practice' => 'Practice',
+  _ => key,
+};
 
 IconData _skillIcon(String? skill) => switch (skill?.toLowerCase()) {
   'reading' => Icons.menu_book_outlined,

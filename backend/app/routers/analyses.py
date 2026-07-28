@@ -35,6 +35,9 @@ def _lesson_context(lesson: Lesson) -> dict:
         "summary": lesson.summary,
         "lesson_body": lesson.body,
         "lesson_transcript": lesson.transcript,
+        "content_pack": lesson.content_pack or {},
+        "source_attribution": lesson.source_attribution,
+        "license_name": lesson.license_name,
         "media": [
             {
                 "title": media.title,

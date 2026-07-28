@@ -126,12 +126,15 @@ failures do not overwrite it.
 
 - `GET /content/courses?kind=core|ielts&level=A1|A2|B1|B2|C1` — list fixed courses and chapters.
 - `GET /content/courses/{code}` — retrieve one course with lesson summaries and active-space progress.
-- `GET /content/lessons/{id}` — retrieve lesson body, transcript, published media items and progress.
+- `GET /content/lessons/{id}` — retrieve lesson body, structured practice content, provenance, transcript, published media items and progress.
 - `PATCH /content/lessons/{id}/progress` — set `started` or `completed` status, with optional score/note.
 - `PATCH /content/lessons/{id}/media-progress` — save the current media position and completion state.
 - `GET /content/media/{id}/stream` — authenticated stream for a private uploaded asset.
 
-The catalog currently seeds one core course per CEFR level and four IELTS band tracks from 4.5–5.5 through 7.0–8.0.
+The catalog currently seeds one focused English A2→B1 content pack at `core-b1`, plus legacy core tracks for the other
+levels and four IELTS band tracks from 4.5–5.5 through 7.0–8.0. The focused pack has six original lessons in two units;
+its `content_pack` contains objectives, vocabulary, reading/listening prompts, practice items, answer keys and speaking/
+writing tasks. Each lesson also returns `source_attribution` and `license_name`.
 Each lesson can contain multiple `LessonMedia` rows. The API supports local multipart uploads and already-hosted
 licensed URLs:
 

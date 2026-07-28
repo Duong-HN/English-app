@@ -439,6 +439,9 @@ class Lesson(Base):
     body: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    content_pack: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_attribution: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    license_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     duration_minutes: Mapped[int] = mapped_column(default=15)
     unit: Mapped[CourseUnit] = relationship(back_populates="lessons")
     media_items: Mapped[list[LessonMedia]] = relationship(

@@ -415,6 +415,9 @@ class LessonResponse(BaseModel):
     summary: str
     body: str
     transcript: str | None
+    content_pack: dict = Field(default_factory=dict)
+    source_attribution: str | None
+    license_name: str | None
     media_url: str | None
     media: list[LessonMediaResponse] = Field(default_factory=list)
     duration_minutes: int
