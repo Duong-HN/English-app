@@ -85,10 +85,17 @@ Flutter web development preview:
 ```powershell
 cd mobile
 flutter pub get
-flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
+flutter run -d chrome `
+  --dart-define=API_BASE_URL=http://localhost:8000 `
+  --dart-define=TEACHER_DASHBOARD_URL=http://localhost:3000
 ```
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
+
+Teacher mode opens the responsive Teacher Dashboard in the device's external
+browser and uses a separate web login/session. Set
+`TEACHER_DASHBOARD_URL` to a LAN, staging or production URL as appropriate;
+staging and production must use HTTPS. No mobile token is appended to this URL.
 
 On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. Self-study
 then resumes through goal, daily time, placement and path creation; class mode opens teacher-assigned work immediately.
@@ -161,6 +168,7 @@ Production requirements:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [User flows: Mobile Learner, Mobile Teacher and Web Dashboard](docs/USER_FLOWS.md)
 - [API contract](docs/API.md)
 - [Testing](docs/TEST_PLAN.md)
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)

@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth_controller.dart';
+import '../../core/app_config.dart';
 import '../settings/notifications_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/learnmate_top_bar.dart';
 
 class TeacherModePage extends StatelessWidget {
-  const TeacherModePage({super.key, required this.authController});
+  const TeacherModePage({
+    super.key,
+    required this.authController,
+    this.teacherDashboardUrl,
+  });
 
   final AuthController authController;
+  final String? teacherDashboardUrl;
+
+  Uri? get _teacherDashboardUri => teacherDashboardUrl == null
+      ? AppConfig.teacherDashboardUri
+      : AppConfig.parseTeacherDashboardUrl(teacherDashboardUrl!);
 
   Future<void> _openSettings(BuildContext context) async {
     await Navigator.of(context).push(
@@ -22,6 +33,35 @@ class TeacherModePage extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NotificationsPage(apiClient: authController.apiClient),
+      ),
+    );
+  }
+
+  Future<void> _openTeacherDashboard(BuildContext context) async {
+    final uri = _teacherDashboardUri;
+    if (uri == null) {
+      _showLaunchError(context);
+      return;
+    }
+
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        _showLaunchError(context);
+      }
+    } on Exception {
+      if (context.mounted) {
+        _showLaunchError(context);
+      }
+    }
+  }
+
+  void _showLaunchError(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Không thể mở Teacher Dashboard. Kiểm tra URL và thử lại.',
+        ),
       ),
     );
   }
@@ -90,6 +130,13 @@ class TeacherModePage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
+              key: const Key('open-teacher-dashboard'),
+              onPressed: () => _openTeacherDashboard(context),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Mở Teacher Dashboard'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
               key: const Key('switch-to-learner-mode'),
               onPressed: () =>
                   authController.setActiveMode(AuthController.learnerMode),

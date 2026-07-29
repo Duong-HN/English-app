@@ -1,16 +1,16 @@
 # Plan 2 — Teacher mode mobile và Teacher Dashboard web
 
-**Trạng thái:** Draft để xem xét
+**Trạng thái:** MVP đã triển khai trên nhánh `feat/teacher-dashboard-handoff`, chờ review
 **Quyết định đề xuất:** Giữ kiến trúc hiện tại: mobile là Learner space và điểm truy cập Teacher mode; các thao tác quản lý giáo viên đầy đủ nằm trên Teacher Dashboard web.
 
 ## 1. Bối cảnh hiện tại
 
 - Tài khoản đã được duyệt quyền `teacher` có thể chuyển giữa `learner mode` và `teacher mode` trong Cài đặt.
-- `TeacherModePage` hiện mới hiển thị thông tin và hướng dẫn dùng Teacher Dashboard; chưa có nút mở URL thật.
+- `TeacherModePage` hiển thị Teacher Overview và đã có nút mở URL thật bằng trình duyệt ngoài.
 - Web portal đã phân quyền theo role:
   - `teacher` → `TeacherDashboard`: tạo lớp, giao bài, xem bài nộp và gửi phản hồi.
   - `admin` → Admin Dashboard: quản trị người dùng, hồ sơ giáo viên, nội dung và nhật ký.
-- Flutter chưa có dependency `url_launcher`.
+- Flutter đã có dependency `url_launcher` và `AppConfig` đọc `TEACHER_DASHBOARD_URL` từ `--dart-define`.
 - Stitch project hiện có `Settings - Mode Switching` và `Teacher Dashboard`. Màn hình Teacher Dashboard đang là mobile design, cần chỉnh lại thành web/desktop design nếu không triển khai full teacher CRUD trên mobile.
 
 ## 2. Mục tiêu
@@ -118,7 +118,7 @@ Triển khai one-time handoff:
 
 Chỉ làm phần này khi người dùng thực sự cần tránh đăng nhập lại trên web.
 
-## 8. Các thay đổi dự kiến
+## 8. Các thay đổi đã triển khai
 
 ### Flutter mobile
 
@@ -126,9 +126,9 @@ Chỉ làm phần này khi người dùng thực sự cần tránh đăng nhập
 - Thêm `AppConfig` đọc `TEACHER_DASHBOARD_URL`.
 - Cập nhật `TeacherModePage`:
   - thêm nút mở dashboard;
-  - xử lý lỗi mở URL;
+  - xử lý URL thiếu/sai và lỗi mở URL;
   - giữ nút chuyển về learner mode.
-- Cập nhật copy để nói rõ dashboard mở bằng trình duyệt web.
+- Cập nhật copy và README để nói rõ dashboard mở bằng trình duyệt web.
 
 ### Backend
 
@@ -148,7 +148,7 @@ MVP không cần thay đổi backend. Giữ các quy tắc:
 ### Stitch
 
 - Giữ `Settings - Mode Switching` là mobile screen.
-- Đổi `Teacher Dashboard` hiện tại thành bản desktop/web hoặc tạo thêm bản desktop.
+- Việc đổi `Teacher Dashboard` hiện tại thành bản desktop/web vẫn là việc thiết kế cần review tiếp theo.
 - Đổi tên màn hình mobile thành `Teacher Overview` hoặc `Teacher mode handoff`.
 - Không thiết kế full CRUD teacher dashboard native trong mobile scope.
 
@@ -161,6 +161,9 @@ MVP không cần thay đổi backend. Giữ các quy tắc:
 - Bấm nút gọi đúng URL cấu hình.
 - URL không hợp lệ hiển thị lỗi thân thiện.
 - Chuyển về Learner mode vẫn hoạt động.
+
+Đã có test tự động tại `mobile/test/teacher_mode_page_test.dart` cho việc parse
+URL, mở dashboard bằng `externalApplication`, lỗi cấu hình và chuyển về learner.
 
 ### Web/backend
 
