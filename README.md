@@ -168,6 +168,7 @@ Production requirements:
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [User flows: Mobile Learner, Mobile Teacher and Web Dashboard](docs/USER_FLOWS.md)
 - [API contract](docs/API.md)
 - [Testing](docs/TEST_PLAN.md)
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)
