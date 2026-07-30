@@ -1,5 +1,9 @@
 # Deployment and CI/CD
 
+The CI/CD files package a graduation-project prototype. A successful build or
+image publication is not evidence of production readiness. The staged target
+architecture and production exit gates are defined in [Production roadmap](PRODUCTION_ROADMAP.md).
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes and pull requests:
