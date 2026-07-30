@@ -311,7 +311,7 @@ async def adapt_learning_path(
     ]
     provider = build_provider(settings)
     try:
-        plan = await provider.generate_learning_path(
+        raw_plan = await provider.generate_learning_path(
             {
                 "goal": learning_path.goal,
                 "current_level": learning_path.current_level,
@@ -319,6 +319,7 @@ async def adapt_learning_path(
             },
             profile,
         )
+        plan = LearningPathResult.model_validate(raw_plan).model_dump()
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider failed") from exc
     learning_path.plan = plan
