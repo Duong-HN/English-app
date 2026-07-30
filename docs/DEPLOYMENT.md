@@ -1,5 +1,11 @@
 # Deployment and CI/CD
 
+## Deployment status
+
+The workflows in this document package and verify a graduation-project prototype. A successful CI build or image publish is
+not evidence of production readiness. Public deployment additionally requires PostgreSQL integration testing, a separate
+migration job, object storage, rate limiting, monitoring, backups, restore testing and a verified rollback procedure.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes and pull requests:
@@ -57,7 +63,9 @@ GEMINI_API_KEY=<secret>
 ALLOWED_ORIGINS=<explicit HTTPS origins>
 ```
 
-The container runs `alembic upgrade head` before Uvicorn and exposes `/health/ready` for health checks.
+The prototype container runs `alembic upgrade head` before Uvicorn and exposes `/health/ready` for health checks. This
+startup-migration pattern is suitable only for a controlled single-instance demonstration. Production deployments should
+run migrations as a separate, reviewed job before application rollout.
 
 Run the admin image with:
 
@@ -91,6 +99,10 @@ Expected endpoints:
 
 Compose waits for PostgreSQL, migrates the API schema, then starts the admin web
 after the API reports healthy.
+
+This Compose environment is for local development and demonstration. It is not a
+production topology and does not provide managed backups, multi-instance shared
+media, TLS termination, autoscaling or disaster recovery.
 
 ## What cannot be automated from this local repository
 
