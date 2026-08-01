@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.cli import create_admin
-from app.models import User
+from app.models import AnalysisJob, User
 
 
 def register(client: TestClient, email: str) -> dict:
@@ -120,3 +120,38 @@ def test_admin_can_review_and_delete_analysis(client, db_session):
     assert any(item["id"] == created.json()["id"] for item in listed.json()["items"])
     assert deleted.status_code == 200
     assert any(item["action"] == "analysis.deleted" for item in logs.json()["items"])
+
+
+def test_admin_can_monitor_and_retry_failed_analysis_job(client, db_session):
+    admin = register(client, "job-admin@example.com")
+    learner = register(client, "job-owner@example.com")
+    promote(db_session, "job-admin@example.com")
+    admin_headers = auth_header(admin["access_token"])
+    learner_headers = auth_header(learner["access_token"])
+
+    queued = client.post(
+        "/api/v1/analysis-jobs/reading",
+        headers={**learner_headers, "Idempotency-Key": "admin-job-test"},
+        json={"input_text": "The learner practices English every day."},
+    )
+    assert queued.status_code == 202, queued.text
+    job = db_session.get(AnalysisJob, queued.json()["id"])
+    assert job is not None
+    job.status = "failed"
+    job.error_message = "provider failed"
+    db_session.commit()
+
+    listed = client.get("/api/v1/admin/analysis-jobs?status=failed", headers=admin_headers)
+    retried = client.post(
+        f"/api/v1/admin/analysis-jobs/{job.id}/retry",
+        headers=admin_headers,
+        json={},
+    )
+    logs = client.get("/api/v1/admin/audit-logs", headers=admin_headers)
+
+    assert listed.status_code == 200
+    assert any(item["id"] == job.id and item["status"] == "failed" for item in listed.json()["items"])
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "queued"
+    assert retried.json()["attempt_count"] == 0
+    assert any(item["action"] == "analysis_job.retried" for item in logs.json()["items"])

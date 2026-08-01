@@ -836,6 +836,7 @@ class _StudyPageState extends State<_StudyPage> {
   bool _loading = false;
   bool _capturing = false;
   bool _listening = false;
+  String _analysisStatus = 'idle';
   String? _error;
 
   void setTaskContext(Map<String, dynamic>? task) {
@@ -850,6 +851,7 @@ class _StudyPageState extends State<_StudyPage> {
       _mode = mode;
       _result = null;
       _error = null;
+      _analysisStatus = 'idle';
       _listening = false;
       _taskProgressRecorded = false;
       if (task != null) _textController.clear();
@@ -873,6 +875,7 @@ class _StudyPageState extends State<_StudyPage> {
       _loading = true;
       _error = null;
       _result = null;
+      _analysisStatus = 'processing';
     });
     try {
       final learningPathId = _taskText(const [
@@ -885,17 +888,27 @@ class _StudyPageState extends State<_StudyPage> {
         inputText: text,
         learningPathId: learningPathId,
         taskDay: taskDay,
+        onStatus: (status) {
+          if (mounted) setState(() => _analysisStatus = status);
+        },
       );
       if (mounted) {
         setState(() {
           _result = response['result'] as Map<String, dynamic>;
+          _analysisStatus = 'succeeded';
           _taskProgressRecorded = learningPathId != null && taskDay != null;
         });
       }
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _analysisStatus = 'failed';
+          _error = exception.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
+        setState(() => _analysisStatus = 'failed');
         setState(() => _error = 'Không thể kết nối máy chủ.');
       }
     } finally {
@@ -970,6 +983,7 @@ class _StudyPageState extends State<_StudyPage> {
       _mode = selected.first;
       _result = null;
       _error = null;
+      _analysisStatus = 'idle';
       _listening = false;
     });
   }
@@ -1097,6 +1111,13 @@ class _StudyPageState extends State<_StudyPage> {
             ),
           ),
         ),
+        if (_analysisStatus != 'idle') ...[
+          const SizedBox(height: 10),
+          _AnalysisStatusCard(
+            status: _analysisStatus,
+            onRetry: _analysisStatus == 'failed' && !_loading ? _analyze : null,
+          ),
+        ],
         if (_error != null) ...[
           const SizedBox(height: 14),
           _MessageCard(message: _error!, isError: true),
@@ -1154,6 +1175,51 @@ class _StudyPageState extends State<_StudyPage> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalysisStatusCard extends StatelessWidget {
+  const _AnalysisStatusCard({required this.status, this.onRetry});
+
+  final String status;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'succeeded' => 'Thành công',
+      'failed' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final icon = switch (status) {
+      'succeeded' => Icons.check_circle,
+      'failed' => Icons.error_outline,
+      _ => Icons.hourglass_top,
+    };
+    final color = switch (status) {
+      'succeeded' => Colors.green,
+      'failed' => Colors.red,
+      _ => Colors.orange,
+    };
+    return Semantics(
+      liveRegion: true,
+      label: 'Trạng thái phân tích: $label',
+      child: Row(
+        key: const Key('analysis-status'),
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Thử lại')),
         ],
       ),
     );

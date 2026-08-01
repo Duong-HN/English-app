@@ -9,6 +9,7 @@ from ..dependencies import require_admin
 from ..models import (
     AdminAuditLog,
     Analysis,
+    AnalysisJob,
     Classroom,
     LearningPath,
     TeacherApplication,
@@ -16,6 +17,8 @@ from ..models import (
     utc_now,
 )
 from ..schemas import (
+    AdminAnalysisJobListResponse,
+    AdminAnalysisJobResponse,
     AdminAnalysisListResponse,
     AdminAnalysisResponse,
     AdminAuditLogListResponse,
@@ -29,6 +32,7 @@ from ..schemas import (
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdate,
+    AnalysisJobStatus,
     AnalysisType,
     MessageResponse,
     TeacherApplicationReview,
@@ -67,6 +71,25 @@ def _analysis_response(analysis: Analysis, user: User) -> AdminAnalysisResponse:
         learning_path_id=analysis.learning_path_id,
         task_day=analysis.task_day,
         created_at=analysis.created_at,
+    )
+
+
+def _analysis_job_response(job: AnalysisJob, user: User) -> AdminAnalysisJobResponse:
+    return AdminAnalysisJobResponse(
+        id=job.id,
+        user_id=user.id,
+        user_email=user.email,
+        user_display_name=user.display_name,
+        type=job.type,
+        status=job.status,
+        analysis_id=job.analysis_id,
+        provider=job.provider,
+        error_message=job.error_message,
+        attempt_count=job.attempt_count,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        updated_at=job.updated_at,
     )
 
 
@@ -437,6 +460,67 @@ def list_analyses(
         items=[_analysis_response(analysis, user) for analysis, user in rows],
         total=total,
     )
+
+
+@router.get("/analysis-jobs", response_model=AdminAnalysisJobListResponse)
+def list_analysis_jobs(
+    job_status: AnalysisJobStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    filters = [AnalysisJob.user_id == User.id]
+    if job_status:
+        filters.append(AnalysisJob.status == job_status)
+    total = db.scalar(select(func.count()).select_from(AnalysisJob).join(User).where(*filters)) or 0
+    rows = db.execute(
+        select(AnalysisJob, User)
+        .join(User)
+        .where(*filters)
+        .order_by(AnalysisJob.created_at.desc(), AnalysisJob.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return AdminAnalysisJobListResponse(
+        items=[_analysis_job_response(job, user) for job, user in rows],
+        total=total,
+    )
+
+
+@router.post("/analysis-jobs/{job_id}/retry", response_model=AdminAnalysisJobResponse)
+def retry_analysis_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    row = db.execute(select(AnalysisJob, User).join(User).where(AnalysisJob.id == job_id)).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis job not found")
+    job, user = row
+    if job.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed analysis jobs can be retried",
+        )
+    job.status = "queued"
+    job.attempt_count = 0
+    job.available_at = utc_now()
+    job.started_at = None
+    job.completed_at = None
+    job.error_message = None
+    job.updated_at = utc_now()
+    _record_audit(
+        db,
+        admin,
+        action="analysis_job.retried",
+        target_type="analysis_job",
+        target_id=job.id,
+        details={"user_id": user.id, "analysis_type": job.type},
+    )
+    db.commit()
+    db.refresh(job)
+    return _analysis_job_response(job, user)
 
 
 @router.get("/analyses/{analysis_id}", response_model=AdminAnalysisResponse)

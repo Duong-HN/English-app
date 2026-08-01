@@ -29,6 +29,8 @@ class ApiClient {
   String? learningSpaceId;
 
   static const _timeout = Duration(seconds: 30);
+  static const _analysisPollInterval = Duration(milliseconds: 500);
+  static const _analysisMaxPolls = 120;
 
   Future<Map<String, dynamic>> register({
     required String email,
@@ -61,9 +63,30 @@ class ApiClient {
     String? learningPathId,
     int? taskDay,
     String? lessonId,
+    void Function(String status)? onStatus,
   }) {
-    return _post(
-      '/api/v1/analyses/$type',
+    return _analyzeWithJob(
+      type: type,
+      inputText: inputText,
+      learningPathId: learningPathId,
+      taskDay: taskDay,
+      lessonId: lessonId,
+      onStatus: onStatus,
+    );
+  }
+
+  Future<Map<String, dynamic>> _analyzeWithJob({
+    required String type,
+    required String inputText,
+    String? learningPathId,
+    int? taskDay,
+    String? lessonId,
+    void Function(String status)? onStatus,
+  }) async {
+    final idempotencyKey =
+        'mobile-${DateTime.now().microsecondsSinceEpoch}-$type';
+    final job = await _post(
+      '/api/v1/analysis-jobs/$type',
       body: {
         'input_text': inputText,
         ...?(learningPathId == null
@@ -72,7 +95,35 @@ class ApiClient {
         ...?(taskDay == null ? null : {'task_day': taskDay}),
         ...?(lessonId == null ? null : {'lesson_id': lessonId}),
       },
+      extraHeaders: {'Idempotency-Key': idempotencyKey},
     );
+
+    var current = job;
+    onStatus?.call(current['status']?.toString() ?? 'queued');
+    for (var attempt = 0; attempt < _analysisMaxPolls; attempt++) {
+      final status = current['status']?.toString();
+      if (status == 'succeeded') {
+        final analysisId = current['analysis_id']?.toString();
+        if (analysisId == null || analysisId.isEmpty) {
+          throw const ApiException('AI job hoàn tất nhưng thiếu kết quả.');
+        }
+        return _get('/api/v1/analyses/${Uri.encodeComponent(analysisId)}');
+      }
+      if (status == 'failed') {
+        onStatus?.call('failed');
+        throw ApiException(
+          current['error_message']?.toString() ?? 'AI không thể xử lý bài này.',
+        );
+      }
+      if (attempt > 0) {
+        await Future<void>.delayed(_analysisPollInterval);
+      }
+      current = await _get(
+        '/api/v1/analysis-jobs/${Uri.encodeComponent(current['id'].toString())}',
+      );
+      onStatus?.call(current['status']?.toString() ?? 'processing');
+    }
+    throw const ApiException('AI xử lý quá lâu. Hãy thử lại sau.');
   }
 
   Future<List<Map<String, dynamic>>> history() async {
@@ -333,11 +384,15 @@ class ApiClient {
     String path, {
     required Map<String, dynamic> body,
     bool authenticated = true,
+    Map<String, String>? extraHeaders,
   }) async {
     final response = await _client
         .post(
           Uri.parse('$baseUrl$path'),
-          headers: _headers(authenticated: authenticated),
+          headers: {
+            ..._headers(authenticated: authenticated),
+            ...?extraHeaders,
+          },
           body: jsonEncode(body),
         )
         .timeout(_timeout);

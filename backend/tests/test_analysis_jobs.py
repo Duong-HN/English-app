@@ -1,8 +1,12 @@
+import asyncio
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
-from app.worker import process_one
+from app.db import SessionLocal
+from app.models import AnalysisJob, utc_now
+from app.worker import process_job
 
 
 def _register(client: TestClient, email: str) -> dict:
@@ -40,7 +44,14 @@ def test_analysis_job_is_idempotent_and_processed_by_worker(client):
     )
     assert conflict.status_code == 409, conflict.text
 
-    assert process_one() is True
+    with SessionLocal() as db:
+        job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == queued.json()["id"]))
+        assert job is not None
+        job.status = "processing"
+        job.attempt_count = 1
+        job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_job(queued.json()["id"]))
     completed = client.get(
         f"/api/v1/analysis-jobs/{queued.json()['id']}",
         headers={"Authorization": f"Bearer {session['access_token']}"},

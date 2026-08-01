@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminAnalysis,
+  AdminAnalysisJob,
   AdminApi,
   AdminLearningPath,
   AdminStats,
@@ -22,13 +23,14 @@ import {
 import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "teacher-applications" | "analyses" | "paths" | "content" | "audit" | "console";
+type View = "overview" | "users" | "teacher-applications" | "analyses" | "analysis-jobs" | "paths" | "content" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
 const PAGE_SIZE = 20;
 
 const navItems: Array<{ id: View; label: string; short: string }> = [
+  { id: "analysis-jobs", label: "AI jobs", short: "05" },
   { id: "overview", label: "Tổng quan", short: "01" },
   { id: "users", label: "Người dùng", short: "02" },
   { id: "teacher-applications", label: "Hồ sơ giáo viên", short: "03" },
@@ -645,6 +647,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           {view === "users" && <UsersPage api={api} currentUser={session.user} />}
           {view === "teacher-applications" && <TeacherApplicationsPage api={api} />}
           {view === "analyses" && <AnalysesPage api={api} />}
+          {view === "analysis-jobs" && <AnalysisJobsPage api={api} />}
           {view === "paths" && <LearningPathsPage api={api} />}
           {view === "content" && <ContentPage api={api} />}
           {view === "audit" && <AuditPage api={api} />}
@@ -1184,6 +1187,101 @@ function AnalysesPage({ api }: { api: AdminApi }) {
         </section>
       )}
       {selected && <AnalysisDialog item={selected} onClose={() => setSelected(null)} onDelete={() => void remove(selected)} />}
+    </div>
+  );
+}
+
+function AnalysisJobsPage({ api }: { api: AdminApi }) {
+  const [status, setStatus] = useState<AdminAnalysisJob["status"] | "">("");
+  const [data, setData] = useState<{ items: AdminAnalysisJob[]; total: number } | null>(null);
+  const [reload, setReload] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      try {
+        const result = await api.analysisJobs({ status, limit: PAGE_SIZE, offset: 0 });
+        if (!active) return;
+        setData(result);
+        setError(null);
+        if (result.items.some((item) => item.status === "queued" || item.status === "processing")) {
+          timer = setTimeout(load, 2000);
+        }
+      } catch (reason) {
+        if (active) setError(readableError(reason));
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [api, reload, status]);
+
+  async function retry(item: AdminAnalysisJob) {
+    setBusyId(item.id);
+    setError(null);
+    try {
+      await api.retryAnalysisJob(item.id);
+      setReload((value) => value + 1);
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const label = (value: AdminAnalysisJob["status"]) => ({
+    queued: "Đang chờ",
+    processing: "Đang xử lý",
+    succeeded: "Thành công",
+    failed: "Thất bại",
+  })[value];
+
+  return (
+    <div className="page-stack">
+      <section className="section-heading">
+        <div>
+          <p className="eyebrow blue">AI operations</p>
+          <h2>AI jobs</h2>
+          <p className="muted">Theo dõi queue bất đồng bộ, lỗi provider và retry có kiểm soát.</p>
+        </div>
+        <span className="count-badge">{data?.total ?? 0} jobs</span>
+      </section>
+      <div className="filter-bar">
+        <label>
+          <span className="sr-only">Lọc trạng thái job</span>
+          <select aria-label="Lọc trạng thái job" value={status} onChange={(event) => setStatus(event.target.value as AdminAnalysisJob["status"] | "")}>
+            <option value="">Tất cả trạng thái</option>
+            <option value="queued">Đang chờ</option>
+            <option value="processing">Đang xử lý</option>
+            <option value="succeeded">Thành công</option>
+            <option value="failed">Thất bại</option>
+          </select>
+        </label>
+        <span className="muted">Tự động polling khi còn job đang chạy.</span>
+      </div>
+      {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+      {!data ? <LoadingState label="Đang tải trạng thái AI jobs…" /> : data.items.length === 0 ? <EmptyState message="Không có AI job phù hợp." /> : (
+        <section className="analysis-grid">
+          {data.items.map((item) => (
+            <article className="analysis-card" key={item.id}>
+              <div className="analysis-card-top">
+                <span className={`type-badge ${item.type}`}>{item.type === "reading" ? "Đọc hiểu" : item.type === "writing" ? "Viết" : "Luyện nói"}</span>
+                <span className={`status-pill ${item.status === "succeeded" ? "active" : item.status === "failed" ? "locked" : "pending"}`}>{label(item.status)}</span>
+              </div>
+              <h3>{item.user_display_name}</h3>
+              <div className="analysis-owner"><span className="mini-avatar">{initials(item.user_display_name)}</span><span><strong>{item.user_email}</strong><small>Thử lần {item.attempt_count}</small></span></div>
+              <div className="analysis-meta"><span>{formatDate(item.created_at)}</span><strong>{item.provider ?? "Chưa có provider"}</strong></div>
+              {item.error_message && <div className="inline-alert error-alert">{item.error_message}</div>}
+              {item.status === "failed" && <button className="secondary-button" type="button" disabled={busyId === item.id} onClick={() => void retry(item)}>{busyId === item.id ? "Đang đưa vào queue…" : "Thử lại"}</button>}
+            </article>
+          ))}
+        </section>
+      )}
     </div>
   );
 }

@@ -33,10 +33,25 @@ void main() {
   });
 
   test('authenticated analysis sends the bearer token', () async {
+    final requestedPaths = <String>[];
+    final statuses = <String>[];
     final client = ApiClient(
       baseUrl: 'https://api.example.test',
       client: MockClient((request) async {
+        requestedPaths.add(request.url.path);
         expect(request.headers['Authorization'], 'Bearer secret-token');
+        if (request.method == 'POST') {
+          expect(request.url.path, '/api/v1/analysis-jobs/reading');
+          expect(request.headers['Idempotency-Key'], startsWith('mobile-'));
+          return jsonResponse({'id': 'job-1', 'status': 'queued'});
+        }
+        if (request.url.path == '/api/v1/analysis-jobs/job-1') {
+          return jsonResponse({
+            'id': 'job-1',
+            'status': 'succeeded',
+            'analysis_id': 'analysis-1',
+          });
+        }
         return http.Response(
           jsonEncode({
             'result': {'summary': 'ok'},
@@ -50,8 +65,15 @@ void main() {
     final response = await client.analyze(
       type: 'reading',
       inputText: 'English text',
+      onStatus: statuses.add,
     );
     expect((response['result'] as Map<String, dynamic>)['summary'], 'ok');
+    expect(requestedPaths, [
+      '/api/v1/analysis-jobs/reading',
+      '/api/v1/analysis-jobs/job-1',
+      '/api/v1/analyses/analysis-1',
+    ]);
+    expect(statuses, ['queued', 'succeeded']);
   });
 
   test('API validation detail becomes a readable exception', () async {
@@ -216,11 +238,21 @@ void main() {
   });
 
   test('contextual analysis includes learning path and task day', () async {
-    late http.Request captured;
+    late http.Request capturedPost;
     final client = ApiClient(
       baseUrl: 'https://api.example.test',
       client: MockClient((request) async {
-        captured = request;
+        if (request.method == 'POST') {
+          capturedPost = request;
+          return jsonResponse({'id': 'job-1', 'status': 'queued'}, 202);
+        }
+        if (request.url.path == '/api/v1/analysis-jobs/job-1') {
+          return jsonResponse({
+            'id': 'job-1',
+            'status': 'succeeded',
+            'analysis_id': 'analysis-1',
+          });
+        }
         return jsonResponse({
           'result': {'summary': 'ok'},
         });
@@ -235,8 +267,9 @@ void main() {
       lessonId: 'lesson-1',
     );
 
-    expect(captured.url.path, '/api/v1/analyses/writing');
-    expect(jsonDecode(captured.body), {
+    expect(capturedPost.url.path, '/api/v1/analysis-jobs/writing');
+    expect(capturedPost.headers['Idempotency-Key'], startsWith('mobile-'));
+    expect(jsonDecode(capturedPost.body), {
       'input_text': 'My paragraph.',
       'learning_path_id': 'path-1',
       'task_day': 3,

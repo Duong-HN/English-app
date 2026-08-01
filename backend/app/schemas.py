@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 from .ai_schemas import LearningPathResult
 
 AnalysisType = Literal["reading", "writing", "speaking"]
+AnalysisJobStatus = Literal["queued", "processing", "succeeded", "failed"]
 MediaType = Literal["audio", "video"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 GoalCode = Literal["ielts", "communication", "study_abroad", "work"]
@@ -151,7 +152,7 @@ class AnalysisJobResponse(BaseModel):
 
     id: str
     type: AnalysisType
-    status: Literal["queued", "processing", "succeeded", "failed"]
+    status: AnalysisJobStatus
     analysis_id: str | None
     provider: str | None
     error_message: str | None
@@ -759,6 +760,28 @@ class AdminAnalysisResponse(AnalysisResponse):
 
 class AdminAnalysisListResponse(BaseModel):
     items: list[AdminAnalysisResponse]
+    total: int
+
+
+class AdminAnalysisJobResponse(BaseModel):
+    id: str
+    user_id: str
+    user_email: EmailStr
+    user_display_name: str
+    type: AnalysisType
+    status: AnalysisJobStatus
+    analysis_id: str | None
+    provider: str | None
+    error_message: str | None
+    attempt_count: int
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    updated_at: datetime | None
+
+
+class AdminAnalysisJobListResponse(BaseModel):
+    items: list[AdminAnalysisJobResponse]
     total: int
 
 
