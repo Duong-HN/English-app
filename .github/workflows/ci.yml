@@ -18,7 +18,7 @@ jobs:
     name: GitHub Actions workflow lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.12
         with:
@@ -31,7 +31,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
@@ -80,7 +80,7 @@ jobs:
       ENABLE_DEV_AUTH: "false"
       JWT_SECRET: postgres-integration-secret-that-is-long-enough
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
@@ -99,7 +99,7 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2.23.0
         with:
           flutter-version: "3.41.4"
@@ -123,7 +123,7 @@ jobs:
       run:
         working-directory: admin-dashboard
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "24.14.0"
@@ -139,7 +139,7 @@ jobs:
     name: Backend container build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
@@ -153,7 +153,7 @@ jobs:
     name: Admin dashboard container build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:

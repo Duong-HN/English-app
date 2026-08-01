@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2.23.0
         with:
           flutter-version: "3.41.4"
@@ -51,7 +51,7 @@ jobs:
     name: Publish backend image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Resolve lowercase image name
         id: image
         shell: bash
@@ -76,7 +76,7 @@ jobs:
     name: Publish admin dashboard image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Resolve lowercase image name
         id: image
         shell: bash
