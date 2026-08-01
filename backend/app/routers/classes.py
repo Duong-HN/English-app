@@ -235,7 +235,10 @@ def join_class(
     ensure_class_space(db, learner, classroom)
     db.commit()
     teacher = db.get(User, classroom.teacher_id)
-    assert teacher is not None
+    if teacher is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Class teacher is missing"
+        )
     return _class_response(db, classroom, teacher, learner)
 
 
@@ -248,7 +251,10 @@ def get_class(
     classroom = _get_class(db, class_id)
     _require_class_access(db, classroom, user)
     teacher = db.get(User, classroom.teacher_id)
-    assert teacher is not None
+    if teacher is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Class teacher is missing"
+        )
     return _class_response(db, classroom, teacher, user)
 
 
@@ -499,7 +505,10 @@ def update_submission_feedback(
     if submission is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
     assignment = db.get(Assignment, submission.assignment_id)
-    assert assignment is not None
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Submission assignment is missing"
+        )
     _require_class_owner(db, assignment.class_id, user)
     submission.teacher_feedback = request.feedback
     submission.status = "reviewed"
@@ -508,6 +517,9 @@ def update_submission_feedback(
     db.commit()
     db.refresh(submission)
     learner = db.get(User, submission.learner_id)
-    assert learner is not None
+    if learner is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Submission learner is missing"
+        )
     analysis = db.get(Analysis, submission.analysis_id) if submission.analysis_id else None
     return _submission_response(submission, learner, analysis)

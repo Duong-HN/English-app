@@ -155,11 +155,23 @@ void main() {
           }, 200);
         }
         if (request.method == 'POST' &&
-            request.url.path == '/api/v1/analyses/writing') {
+            request.url.path == '/api/v1/analysis-jobs/writing') {
           analysisBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+          return jsonResponse({'id': 'job-1', 'status': 'queued'}, 202);
+        }
+        if (request.method == 'GET' &&
+            request.url.path.startsWith('/api/v1/analysis-jobs/')) {
+          return jsonResponse({
+            'id': request.url.path.split('/').last,
+            'status': 'succeeded',
+            'analysis_id': 'analysis-1',
+          }, 200);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/analyses/analysis-1') {
           return jsonResponse({
             'result': {'score': 8, 'summary': 'Clear introduction.'},
-          }, 201);
+          }, 200);
         }
         if (request.url.path == '/api/v1/classes' ||
             request.url.path == '/api/v1/analyses') {
@@ -301,8 +313,20 @@ void main() {
           return jsonResponse({'detail': 'Learning path not found'}, 404);
         }
         if (request.method == 'POST' &&
-            request.url.path.endsWith('/generate')) {
+            request.url.path == '/api/v1/learning-path-jobs') {
           expect(request.headers['Authorization'], 'Bearer learner-token');
+          return jsonResponse({'id': 'job-1', 'status': 'queued'}, 202);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/learning-path-jobs/job-1') {
+          return jsonResponse({
+            'id': 'job-1',
+            'status': 'succeeded',
+            'learning_path_id': 'path-1',
+          }, 200);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/learning-paths/path-1') {
           return jsonResponse({
             'id': 'path-1',
             'goal': 'Giao tiếp tiếng Anh tự tin trong học tập và công việc',
@@ -318,7 +342,7 @@ void main() {
               'daily_tasks': tasks,
               'checkpoints': ['So sánh ngày 1 và ngày 7.'],
             },
-          }, 201);
+          }, 200);
         }
         return jsonResponse({'detail': 'Unexpected request'}, 500);
       }),
@@ -433,7 +457,20 @@ void main() {
             request.url.path == '/api/v1/analyses') {
           return jsonResponse({'items': <Map<String, dynamic>>[]}, 200);
         }
-        if (request.url.path == '/api/v1/analyses/reading') {
+        if (request.method == 'POST' &&
+            request.url.path == '/api/v1/analysis-jobs/reading') {
+          return jsonResponse({'id': 'job-reading', 'status': 'queued'}, 202);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/analysis-jobs/job-reading') {
+          return jsonResponse({
+            'id': 'job-reading',
+            'status': 'succeeded',
+            'analysis_id': 'analysis-reading',
+          }, 200);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/analyses/analysis-reading') {
           return jsonResponse({
             'result': {
               'summary': 'A short greeting.',

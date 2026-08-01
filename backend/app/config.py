@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     media_storage_dir: str = "./media"
     media_max_size_mb: int = 100
     media_public_base_url: str | None = None
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
 
     allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
@@ -37,11 +39,30 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
-        if self.app_env == "production":
+        if self.app_env.strip().lower() == "production":
             if self.jwt_secret == "development-only-change-me" or len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET must be a random value of at least 32 characters in production")
             if self.enable_dev_auth:
                 raise ValueError("ENABLE_DEV_AUTH must be false in production")
+            if not self.database_url.lower().startswith("postgresql"):
+                raise ValueError("DATABASE_URL must use PostgreSQL in production")
+            if self.auto_create_schema:
+                raise ValueError("AUTO_CREATE_SCHEMA must be false in production")
+            if self.ai_provider.lower() == "mock":
+                raise ValueError("AI_PROVIDER=mock is not allowed in production")
+            if self.ai_provider.lower() == "gemini" and not self.gemini_api_key:
+                raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
+            if not self.origins or any(
+                origin.startswith("http://") or "localhost" in origin or "127.0.0.1" in origin
+                for origin in self.origins
+            ):
+                raise ValueError("ALLOWED_ORIGINS must contain explicit HTTPS production origins")
+            if not self.media_public_base_url or not self.media_public_base_url.startswith("https://"):
+                raise ValueError("MEDIA_PUBLIC_BASE_URL must be an HTTPS URL in production")
+            if not self.rate_limit_enabled:
+                raise ValueError("RATE_LIMIT_ENABLED must be true in production")
+            if self.rate_limit_window_seconds < 1:
+                raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be positive")
         return self
 
 

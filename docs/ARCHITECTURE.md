@@ -9,6 +9,12 @@ LearnMate AI gives formative feedback for Vietnamese English learners. It is not
 
 STT text is never presented as evidence of pronunciation accuracy.
 
+## Scope and deployment status
+
+This architecture describes a graduation-project prototype/MVP. It is designed to demonstrate the learner, teacher and administrator workflows on a small controlled dataset and is not a claim of production readiness or 100,000-user capacity.
+
+Development and demonstration may use SQLite, Mock AI, local media storage and HTTP localhost/LAN URLs. A public deployment must not use those defaults without an explicit security review and additional infrastructure. Production work remains separate: PostgreSQL validation, asynchronous AI jobs, object storage, rate limiting, observability, backups, recovery testing and rollout/rollback controls.
+
 ## Components
 
 | Component | Technology | Responsibility |
@@ -120,12 +126,14 @@ screen is not a second native implementation of the full web dashboard.
 
 `id`, `user_id`, `space_id`, `type`, `input_text`, `result`, `score`, `provider`, `lesson_id`, `created_at`
 
-`analyses.user_id` and `analyses.space_id` are cascading foreign keys. Queries always include the authenticated user and
-active space. AI-specific output remains JSON for MVP flexibility but is validated before persistence.
+`analyses.user_id` and `analyses.space_id` are cascading foreign keys. Prototype analysis queries include the authenticated
+user and active space. AI-specific output remains JSON for MVP flexibility and every provider path is required to validate
+the response before persistence; this invariant must be covered by tests before production.
 
 ### learning spaces and curriculum
 
-`learning_spaces` contains one self-study row per user and one class row per joined class. `learning_paths`,
+`learning_spaces` is intended to contain one self-study row per user and one class row per joined class. The self-study
+uniqueness invariant requires a database partial unique index and concurrency testing before production. `learning_paths`,
 `placement_attempts`, `analyses`, `vocabulary_items` and `lesson_progress` carry `space_id`; their unique and query
 `lessons` hold the fixed catalog; `lesson_progress` attaches it to a self-study space. `lesson_media` stores one or
 more published/draft audio/video assets per lesson, while `lesson_progress.media_progress` stores position and
@@ -141,7 +149,7 @@ Administrative authorization is enforced by the API. The dashboard is only a cli
 
 `id`, `user_id`, `space_id`, `goal`, `current_level`, `minutes_per_day`, `plan`, `provider`, `created_at`
 
-`learning_paths.user_id` cascades on user deletion. The JSON plan is schema-validated before persistence and always contains seven daily tasks. Personalization is derived from aggregate counts, scores and issue titles rather than sending full historical submissions to the provider.
+`learning_paths.user_id` cascades on user deletion. The initial path-creation flow schema-validates the JSON plan and expects seven daily tasks. Every update or adaptation path must enforce the same validation before production. Personalization is derived from aggregate counts, scores and issue titles rather than sending full historical submissions to the provider.
 
 ### onboarding and placement
 
@@ -163,13 +171,13 @@ they joined. Administrator access is explicit and does not turn teachers into ad
 - Passwords use Argon2 through `pwdlib`.
 - JWTs expire and contain only the user ID.
 - Tokens are stored with Flutter secure storage.
-- Admin JWTs are tab-scoped in browser `sessionStorage`, not persistent local storage.
+- Admin JWTs are tab-scoped in browser `sessionStorage`, not persistent local storage. This is a prototype trade-off, not the recommended production session architecture.
 - Gemini keys remain server-side and are ignored by Git.
 - Development identity headers are disabled in production.
 - Administrator endpoints require an active server-validated `admin` role.
 - The final active administrator and the current administrator session are protected from accidental lockout.
 - Production settings reject weak JWT secrets.
-- Lesson media uploads validate media type, size and private storage paths; stream access requires authentication.
+- Lesson media uploads validate declared media type, size and private storage paths; stream access requires authentication. Magic-byte validation, malware scanning, entitlement checks and object storage remain production work.
 - Release signing keys are GitHub secrets, never repository files.
 
 ## Known production boundaries
@@ -178,3 +186,7 @@ they joined. Administrator access is explicit and does not turn teachers into ad
 - Add password reset/email verification before public registration.
 - Add observability and personal-data retention rules.
 - Validate pronunciation with a dedicated acoustic/phoneme pipeline, not an LLM transcript score.
+- Move AI analysis and assignment processing to an idempotent background job before public scale.
+- Replace local media volumes with object storage and CDN delivery before horizontal scaling.
+- Add PostgreSQL integration, migration rollout/rollback testing, backups and restore drills.
+- Add human-reviewed AI quality evaluation; schema-valid JSON alone does not prove educational correctness.

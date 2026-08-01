@@ -160,6 +160,23 @@ export type AdminAnalysis = {
   created_at: string;
 };
 
+export type AdminAnalysisJob = {
+  id: string;
+  user_id: string;
+  user_email: string;
+  user_display_name: string;
+  type: "reading" | "writing" | "speaking";
+  status: "queued" | "processing" | "succeeded" | "failed";
+  analysis_id: string | null;
+  provider: string | null;
+  error_message: string | null;
+  attempt_count: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+};
+
 export type LearningPathTask = {
   day: number;
   title: string;
@@ -606,6 +623,27 @@ export class AdminApi {
   }) {
     return this.request<Page<AdminAnalysis>>(
       `/api/v1/admin/analyses${queryString(filters)}`,
+    );
+  }
+
+  analysisJobs(filters: {
+    status?: AdminAnalysisJob["status"] | "";
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    return this.request<{ items: AdminAnalysisJob[]; total: number }>(
+      `/api/v1/admin/analysis-jobs${queryString({
+        status: filters.status,
+        limit: filters.limit,
+        offset: filters.offset,
+      })}`,
+    );
+  }
+
+  retryAnalysisJob(jobId: string) {
+    return this.request<AdminAnalysisJob>(
+      `/api/v1/admin/analysis-jobs/${encodeURIComponent(jobId)}/retry`,
+      { method: "POST", body: JSON.stringify({}) },
     );
   }
 

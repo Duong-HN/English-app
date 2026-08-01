@@ -4,13 +4,19 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 
 > AI feedback and scores are formative. The application does not claim to provide an official IELTS score or infer pronunciation quality from a transcript.
 
+## Scope and limitations
+
+This repository documents and demonstrates a prototype/MVP, not a production-ready or officially accredited assessment system. The supported scope, non-goals, evaluation requirements and known production boundaries are defined in [Scope and limitations](docs/PROJECT_SCOPE_AND_LIMITATIONS.md).
+
+SQLite, Mock AI, local media storage and HTTP localhost/LAN endpoints are development or demonstration options only. Production deployment requires additional work for PostgreSQL, HTTPS, asynchronous AI jobs, object storage, rate limiting, observability, backups and recovery.
+
 ## Implemented
 
 - Email/password registration and JWT login.
 - Secure token storage on the device.
 - Resumable learner onboarding with goal, daily-time preferences and a server-scored 20-question placement test.
 - Onboarding choice between self-study and joining a teacher's class; the active space can be changed in Settings.
-- Strict self/class data isolation for level, placement, path, analysis, vocabulary and lesson progress.
+- API-enforced space-scoped isolation for learner level, placement, path, analysis, vocabulary and lesson progress in the prototype flows.
 - Fixed level/chapter curriculum, four IELTS band tracks (4.5–8.0), and a lesson library API with progress tracking.
 - Real lesson media pipeline: admin uploads licensed audio/video or registers a hosted URL; mobile plays it with
   authenticated streaming, transcript/caption and resumable media progress.
@@ -18,7 +24,7 @@ LearnMate AI is a graduation-project MVP for formative English learning. It comb
 - Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
 - Structured English A2-to-B1 content pack with six original lessons, practice activities, answer keys and provenance metadata.
 - Teacher mode on mobile is a compact overview; full class management remains in the responsive Teacher Dashboard web portal.
-- Administrator RBAC, account moderation and immutable audit logs.
+- Administrator RBAC, account moderation and append-only application audit records.
 - Responsive teacher/administrator web portal for classes, live metrics, moderation and an authenticated API Console.
 - Reading analysis with translation, vocabulary and questions.
 - Writing feedback with issues, score and rewrite.
@@ -171,7 +177,9 @@ Production requirements:
 - [User flows: Mobile Learner, Mobile Teacher and Web Dashboard](docs/USER_FLOWS.md)
 - [API contract](docs/API.md)
 - [Testing](docs/TEST_PLAN.md)
+- [Scope and limitations](docs/PROJECT_SCOPE_AND_LIMITATIONS.md)
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)
+- [Production roadmap](docs/PRODUCTION_ROADMAP.md)
 - [Git and releases](docs/GIT_WORKFLOW.md)
 - [Codex and LearnMate MCP](docs/MCP.md)
 - [Teacher mode and dashboard plan](plan2.md)

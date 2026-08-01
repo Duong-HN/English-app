@@ -226,6 +226,7 @@ class _LessonPageState extends State<LessonPage> {
   late final TextEditingController _answerController;
   bool _saving = false;
   bool _analyzing = false;
+  String _analysisStatus = 'idle';
   Map<String, dynamic>? _analysis;
   String? _error;
 
@@ -255,6 +256,7 @@ class _LessonPageState extends State<LessonPage> {
     setState(() {
       _analyzing = true;
       _error = null;
+      _analysisStatus = 'processing';
     });
     final type = switch (lesson['skill']?.toString()) {
       'writing' => 'writing',
@@ -266,14 +268,32 @@ class _LessonPageState extends State<LessonPage> {
         type: type,
         inputText: inputText,
         lessonId: _lessonId,
+        onStatus: (status) {
+          if (mounted) setState(() => _analysisStatus = status);
+        },
       );
-      if (mounted) setState(() => _analysis = response);
+      if (mounted) {
+        setState(() {
+          _analysis = response;
+          _analysisStatus = 'succeeded';
+        });
+      }
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _analysisStatus = 'failed';
+          _error = exception.message;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _error = 'Không thể nhận phản hồi từ AI.');
     } finally {
-      if (mounted) setState(() => _analyzing = false);
+      if (mounted) {
+        setState(() {
+          _analyzing = false;
+          if (_analysisStatus == 'processing') _analysisStatus = 'failed';
+        });
+      }
     }
   }
 
@@ -446,6 +466,15 @@ class _LessonPageState extends State<LessonPage> {
                           _analyzing ? 'Đang phân tích…' : 'Nhờ AI nhận xét',
                         ),
                       ),
+                      if (_analysisStatus != 'idle') ...[
+                        const SizedBox(height: 10),
+                        _LessonAnalysisStatus(
+                          status: _analysisStatus,
+                          onRetry: _analysisStatus == 'failed' && !_analyzing
+                              ? () => _analyzeLesson(lesson)
+                              : null,
+                        ),
+                      ],
                       if (_analysis?['result'] is Map) ...[
                         const SizedBox(height: 14),
                         Builder(
@@ -502,6 +531,54 @@ class _LessonPageState extends State<LessonPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _LessonAnalysisStatus extends StatelessWidget {
+  const _LessonAnalysisStatus({required this.status, this.onRetry});
+
+  final String status;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'succeeded' => 'Thành công',
+      'failed' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final color = switch (status) {
+      'succeeded' => Colors.green,
+      'failed' => Theme.of(context).colorScheme.error,
+      _ => Colors.orange,
+    };
+    return Semantics(
+      liveRegion: true,
+      label: 'Trạng thái phân tích: $label',
+      child: Row(
+        key: const Key('lesson-analysis-status'),
+        children: [
+          Icon(
+            status == 'succeeded'
+                ? Icons.check_circle
+                : status == 'failed'
+                ? Icons.error_outline
+                : Icons.hourglass_top,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+        ],
       ),
     );
   }

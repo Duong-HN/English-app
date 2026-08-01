@@ -33,10 +33,14 @@ a fixed schema and persisted in `learning_paths`. Joined classes receive their o
 analyses and progress never feed back into self-study or another class. The pedagogical loop also includes a
 20-question placement diagnostic, a focused English A2→B1 lesson pack, IELTS band course metadata, resumable onboarding,
 daily progress, vocabulary flashcards, teacher-owned classes and AI-analyzed assignments. Run Alembic before starting
-the API so revision `0010` is applied. Lesson audio/video binaries are kept outside the database under
+the API so revision `0012` is applied. Lesson audio/video binaries are kept outside the database under
 `MEDIA_STORAGE_DIR`; use the administrator's curriculum media screen to upload owned/licensed assets or register an
 HTTPS CDN URL. The A2→B1 pack also documents three original video recording scripts under
-[`app/content/README.md`](app/content/README.md). `MEDIA_MAX_SIZE_MB` defaults to 100.
+[`app/content/README.md`](app/content/README.md). `MEDIA_MAX_SIZE_MB` defaults to 100. The legacy
+`POST /api/v1/analyses/{type}` endpoint remains synchronous for prototype clients. New clients can submit
+`POST /api/v1/analysis-jobs/{type}`, poll `GET /api/v1/analysis-jobs/{job_id}`, and run `python -m app.worker`
+as a separate process. The job boundary supports idempotency keys, PostgreSQL-safe claiming and bounded retries,
+but remains a database-backed prototype queue until managed queue infrastructure is introduced.
 
 ## Create the first administrator
 

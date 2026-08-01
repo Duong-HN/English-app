@@ -13,7 +13,7 @@ test("ships useful presets for public and administrator endpoints", () => {
   assert.ok(routes.includes("GET /health/ready"));
   assert.ok(routes.includes("GET /api/v1/admin/stats"));
   assert.ok(routes.includes("POST /api/v1/auth/register"));
-  assert.ok(routes.includes("POST /api/v1/analyses/writing"));
+  assert.ok(routes.includes("GET /api/v1/admin/analysis-jobs?limit=20&offset=0"));
   assert.ok(routes.includes("GET /api/v1/admin/learning-paths?limit=20&offset=0"));
   assert.ok(routes.includes("POST /api/v1/learning-paths/generate"));
 });

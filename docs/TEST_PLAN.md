@@ -1,5 +1,37 @@
 # Test plan
 
+## Scope of evidence
+
+This file is a test plan, not a claim that every listed check has already passed. The current automated tests support the
+prototype workflows. PostgreSQL behavior, production deployment, public-scale load, external-provider quality and real-device
+behavior require separate evidence.
+
+The graduation submission must distinguish:
+
+- automated tests that passed;
+- manual checks that were executed;
+- checks that remain planned;
+- production controls that are outside the prototype scope.
+
+## Academic AI evaluation
+
+In addition to API and schema tests, evaluate at least 30–50 representative learner inputs. The sample should include correct
+answers, grammar errors, vocabulary issues, short and long inputs, off-topic inputs, invalid inputs and multiple learner levels.
+
+Each result should be assessed using a fixed rubric covering:
+
+- correctness of detected issues;
+- usefulness of the feedback;
+- suitability for the learner level;
+- reasonableness of the score;
+- hallucination or unsupported claims;
+- schema validity;
+- latency and estimated provider cost.
+
+Where possible, compare the AI result with a teacher or English-language expert and a simple baseline. Report the sample size,
+rubric, results and known failure cases in the graduation report. AI output that merely conforms to a JSON schema is not proof
+of educational quality.
+
 ## Automated backend checks
 
 - Ruff static checks.

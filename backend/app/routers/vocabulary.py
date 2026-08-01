@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..dependencies import get_current_user
 from ..learning_spaces import get_learning_space
-from ..models import Analysis, LearningSpace, User, VocabularyItem, utc_now
+from ..models import Analysis, LearningSpace, User, VocabularyItem, normalize_vocabulary_word, utc_now
 from ..schemas import (
     VocabularyCreateRequest,
     VocabularyListResponse,
@@ -59,11 +59,12 @@ def upsert_analysis_vocabulary(
         meaning = str(raw_item.get("meaning", "")).strip()
         if not word or not meaning:
             continue
+        normalized_word = normalize_vocabulary_word(word)
         item = db.scalar(
             select(VocabularyItem).where(
                 VocabularyItem.user_id == user.id,
                 VocabularyItem.space_id == analysis.space_id,
-                func.lower(VocabularyItem.word) == word.lower(),
+                VocabularyItem.word_normalized == normalized_word,
             )
         )
         if item is None:
@@ -121,11 +122,12 @@ def create_vocabulary(
 ):
     _validate_analysis(db, user, space, request.analysis_id)
     word = request.word.strip()
+    normalized_word = normalize_vocabulary_word(word)
     item = db.scalar(
         select(VocabularyItem).where(
             VocabularyItem.user_id == user.id,
             VocabularyItem.space_id == space.id,
-            func.lower(VocabularyItem.word) == word.lower(),
+            VocabularyItem.word_normalized == normalized_word,
         )
     )
     if item is None:
@@ -156,7 +158,8 @@ def save_analysis_vocabulary(
     space: LearningSpace = Depends(get_learning_space),
 ):
     analysis = _validate_analysis(db, user, space, analysis_id)
-    assert analysis is not None
+    if analysis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     upsert_analysis_vocabulary(db, user, analysis)
     db.commit()
     items = db.scalars(

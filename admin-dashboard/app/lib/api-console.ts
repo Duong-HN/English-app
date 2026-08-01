@@ -69,13 +69,8 @@ export const API_PRESETS: ApiPreset[] = [
   {
     name: "Chấm bài viết",
     description: "Tạo một lượt phân tích bằng provider đang cấu hình.",
-    method: "POST",
-    path: "/api/v1/analyses/writing",
-    body: JSON.stringify(
-      { input_text: "I have been learning English for three years." },
-      null,
-      2,
-    ),
+    method: "GET",
+    path: "/api/v1/admin/analysis-jobs?limit=20&offset=0",
   },
   {
     name: "Tạo lộ trình 7 ngày",

@@ -1,14 +1,18 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from .db import Base
 
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def normalize_vocabulary_word(value: str) -> str:
+    return " ".join(value.strip().split()).casefold()
 
 
 class User(Base):
@@ -114,6 +118,88 @@ class Analysis(Base):
     learning_path: Mapped[LearningPath | None] = relationship(back_populates="analyses")
 
 
+class AnalysisJob(Base):
+    """Durable boundary between an HTTP request and an AI execution worker.
+
+    The database queue is intentionally small and portable for the prototype.
+    A production deployment should move claiming and scheduling to a managed
+    queue once worker throughput becomes a measured bottleneck.
+    """
+
+    __tablename__ = "analysis_jobs"
+    __table_args__ = (
+        Index("ix_analysis_jobs_status_available", "status", "available_at"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_analysis_job_user_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    space_id: Mapped[str] = mapped_column(ForeignKey("learning_spaces.id", ondelete="CASCADE"), index=True)
+    type: Mapped[str] = mapped_column(String(32), index=True)
+    input_text: Mapped[str] = mapped_column(Text)
+    context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    lesson_id: Mapped[str | None] = mapped_column(
+        ForeignKey("lessons.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    learning_path_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    task_day: Mapped[int | None] = mapped_column(nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    analysis_id: Mapped[str | None] = mapped_column(
+        ForeignKey("analyses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LearningPathJob(Base):
+    """Durable asynchronous boundary for AI-generated learning paths."""
+
+    __tablename__ = "learning_path_jobs"
+    __table_args__ = (
+        Index("ix_learning_path_jobs_status_available", "status", "available_at"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_learning_path_job_user_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    space_id: Mapped[str] = mapped_column(ForeignKey("learning_spaces.id", ondelete="CASCADE"), index=True)
+    goal: Mapped[str] = mapped_column(String(240))
+    current_level: Mapped[str] = mapped_column(String(8))
+    minutes_per_day: Mapped[int]
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    learning_path_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class LearningPath(Base):
     __tablename__ = "learning_paths"
 
@@ -190,7 +276,16 @@ class LearningSpace(Base):
     """
 
     __tablename__ = "learning_spaces"
-    __table_args__ = (UniqueConstraint("user_id", "class_id", name="uq_learning_space_user_class"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "class_id", name="uq_learning_space_user_class"),
+        Index(
+            "uq_learning_space_user_self",
+            "user_id",
+            unique=True,
+            sqlite_where=text("kind = 'self' AND class_id IS NULL"),
+            postgresql_where=text("kind = 'self' AND class_id IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -338,7 +433,9 @@ class AssignmentSubmission(Base):
 
 class VocabularyItem(Base):
     __tablename__ = "vocabulary_items"
-    __table_args__ = (UniqueConstraint("user_id", "space_id", "word", name="uq_vocabulary_user_space_word"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "space_id", "word_normalized", name="uq_vocabulary_user_space_word"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -353,6 +450,7 @@ class VocabularyItem(Base):
         index=True,
     )
     word: Mapped[str] = mapped_column(String(120))
+    word_normalized: Mapped[str] = mapped_column(String(120), nullable=False)
     meaning: Mapped[str] = mapped_column(Text)
     example: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="new", index=True)
@@ -361,6 +459,12 @@ class VocabularyItem(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user: Mapped[User] = relationship(back_populates="vocabulary_items")
     space: Mapped[LearningSpace | None] = relationship(back_populates="vocabulary_items")
+
+    @validates("word")
+    def normalize_word(self, _key: str, value: str) -> str:
+        cleaned = " ".join(value.strip().split())
+        self.word_normalized = normalize_vocabulary_word(cleaned)
+        return cleaned
 
 
 class WordLookupCache(Base):
