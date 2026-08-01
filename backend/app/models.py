@@ -167,6 +167,39 @@ class AnalysisJob(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class LearningPathJob(Base):
+    """Durable asynchronous boundary for AI-generated learning paths."""
+
+    __tablename__ = "learning_path_jobs"
+    __table_args__ = (
+        Index("ix_learning_path_jobs_status_available", "status", "available_at"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_learning_path_job_user_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    space_id: Mapped[str] = mapped_column(ForeignKey("learning_spaces.id", ondelete="CASCADE"), index=True)
+    goal: Mapped[str] = mapped_column(String(240))
+    current_level: Mapped[str] = mapped_column(String(8))
+    minutes_per_day: Mapped[int]
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    learning_path_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class LearningPath(Base):
     __tablename__ = "learning_paths"
 

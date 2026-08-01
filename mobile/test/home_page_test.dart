@@ -313,8 +313,20 @@ void main() {
           return jsonResponse({'detail': 'Learning path not found'}, 404);
         }
         if (request.method == 'POST' &&
-            request.url.path.endsWith('/generate')) {
+            request.url.path == '/api/v1/learning-path-jobs') {
           expect(request.headers['Authorization'], 'Bearer learner-token');
+          return jsonResponse({'id': 'job-1', 'status': 'queued'}, 202);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/learning-path-jobs/job-1') {
+          return jsonResponse({
+            'id': 'job-1',
+            'status': 'succeeded',
+            'learning_path_id': 'path-1',
+          }, 200);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/learning-paths/path-1') {
           return jsonResponse({
             'id': 'path-1',
             'goal': 'Giao tiếp tiếng Anh tự tin trong học tập và công việc',
@@ -330,7 +342,7 @@ void main() {
               'daily_tasks': tasks,
               'checkpoints': ['So sánh ngày 1 và ngày 7.'],
             },
-          }, 201);
+          }, 200);
         }
         return jsonResponse({'detail': 'Unexpected request'}, 500);
       }),

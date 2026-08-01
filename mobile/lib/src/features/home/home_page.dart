@@ -223,6 +223,7 @@ class _LearningPathPageState extends State<_LearningPathPage> {
   int _minutes = 30;
   bool _loading = true;
   bool _generating = false;
+  String _generationStatus = 'idle';
   bool _placementSubmitting = false;
   bool _adapting = false;
   int? _progressDay;
@@ -310,18 +311,37 @@ class _LearningPathPageState extends State<_LearningPathPage> {
     setState(() {
       _generating = true;
       _error = null;
+      _generationStatus = 'processing';
     });
     try {
       final result = await widget.apiClient.generateLearningPath(
         goal: goal,
         currentLevel: _level,
         minutesPerDay: _minutes,
+        onStatus: (status) {
+          if (mounted) setState(() => _generationStatus = status);
+        },
       );
-      if (mounted) setState(() => _learningPath = result);
+      if (mounted) {
+        setState(() {
+          _learningPath = result;
+          _generationStatus = 'succeeded';
+        });
+      }
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _generationStatus = 'failed';
+          _error = exception.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Không thể kết nối máy chủ.');
+      if (mounted) {
+        setState(() {
+          _generationStatus = 'failed';
+          _error = 'Không thể kết nối máy chủ.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _generating = false);
     }
@@ -499,6 +519,15 @@ class _LearningPathPageState extends State<_LearningPathPage> {
               ),
             ),
           ),
+          if (_generationStatus != 'idle') ...[
+            const SizedBox(height: 14),
+            _LearningPathStatusCard(
+              status: _generationStatus,
+              onRetry: _generationStatus == 'failed' && !_generating
+                  ? _generate
+                  : null,
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 14),
             _MessageCard(message: _error!, isError: true),
@@ -535,6 +564,56 @@ class _LearningPathPageState extends State<_LearningPathPage> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _LearningPathStatusCard extends StatelessWidget {
+  const _LearningPathStatusCard({required this.status, this.onRetry});
+
+  final String status;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'succeeded' => 'Thành công',
+      'failed' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final icon = switch (status) {
+      'succeeded' => Icons.check_circle,
+      'failed' => Icons.error_outline,
+      _ => Icons.hourglass_top,
+    };
+    final color = switch (status) {
+      'succeeded' => Colors.green,
+      'failed' => Colors.red,
+      _ => Colors.orange,
+    };
+    return Semantics(
+      liveRegion: true,
+      label: 'Trạng thái tạo lộ trình: $label',
+      child: Card(
+        key: const Key('learning-path-status'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+            ],
+          ),
+        ),
       ),
     );
   }

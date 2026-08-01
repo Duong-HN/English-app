@@ -17,6 +17,7 @@ from .routers import (
     dictionary,
     health,
     home,
+    learning_path_jobs,
     learning_paths,
     learning_spaces,
     onboarding,
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
             "Range",
             "X-Dev-User",
             "X-Learning-Space-ID",
+            "Idempotency-Key",
         ],
         expose_headers=["Accept-Ranges", "Content-Length", "Content-Range"],
     )
@@ -84,6 +86,7 @@ def create_app() -> FastAPI:
     application.include_router(analyses.router, prefix="/api/v1")
     application.include_router(analysis_jobs.router, prefix="/api/v1")
     application.include_router(learning_paths.router, prefix="/api/v1")
+    application.include_router(learning_path_jobs.router, prefix="/api/v1")
     application.include_router(learning_spaces.router, prefix="/api/v1")
     application.include_router(placement.router, prefix="/api/v1")
     application.include_router(vocabulary.router, prefix="/api/v1")

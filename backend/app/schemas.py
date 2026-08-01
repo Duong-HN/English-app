@@ -182,6 +182,21 @@ class LearningPathGenerateRequest(BaseModel):
         return cleaned
 
 
+class LearningPathJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    status: AnalysisJobStatus
+    learning_path_id: str | None
+    provider: str | None
+    error_message: str | None
+    attempt_count: int
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    updated_at: datetime | None
+
+
 class DailyProgress(BaseModel):
     completed: bool = False
     completed_at: datetime | None = None

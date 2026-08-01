@@ -84,7 +84,10 @@ CEFR starting level, per-skill correct/total/percentage values and `test_version
 
 ## Personalized learning paths
 
-- `POST /learning-paths/generate` — create and persist a seven-day path from the learner's goal, CEFR level, daily minutes and up to 20 recent analyses.
+- `POST /learning-path-jobs` — enqueue a seven-day path generation job. The request returns `202` and a job id; clients poll the job until it succeeds or fails.
+- `GET /learning-path-jobs/{job_id}` — read an owned generation job and its resulting `learning_path_id`.
+- `GET /learning-paths/{id}` — read an owned learning path by id after a generation job succeeds.
+- `POST /learning-paths/generate` — legacy synchronous endpoint retained temporarily for compatibility; new clients must use `learning-path-jobs`.
 - `GET /learning-paths/current` — latest path owned by the authenticated learner.
 - `GET /learning-paths?limit=20&offset=0` — learner-owned path history.
 - `PATCH /learning-paths/{id}/days/{day}` — mark a daily task complete/incomplete and optionally save a note.

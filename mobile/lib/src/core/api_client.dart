@@ -31,6 +31,8 @@ class ApiClient {
   static const _timeout = Duration(seconds: 30);
   static const _analysisPollInterval = Duration(milliseconds: 500);
   static const _analysisMaxPolls = 120;
+  static const _learningPathPollInterval = Duration(milliseconds: 500);
+  static const _learningPathMaxPolls = 120;
 
   Future<Map<String, dynamic>> register({
     required String email,
@@ -135,15 +137,51 @@ class ApiClient {
     required String goal,
     required String currentLevel,
     required int minutesPerDay,
-  }) {
-    return _post(
-      '/api/v1/learning-paths/generate',
+    void Function(String status)? onStatus,
+  }) async {
+    final job = await _post(
+      '/api/v1/learning-path-jobs',
       body: {
         'goal': goal,
         'current_level': currentLevel,
         'minutes_per_day': minutesPerDay,
       },
+      extraHeaders: {
+        'Idempotency-Key':
+            'mobile-learning-path-${DateTime.now().microsecondsSinceEpoch}',
+      },
     );
+
+    var current = job;
+    onStatus?.call(current['status']?.toString() ?? 'queued');
+    for (var attempt = 0; attempt < _learningPathMaxPolls; attempt++) {
+      final currentStatus = current['status']?.toString();
+      if (currentStatus == 'succeeded') {
+        final learningPathId = current['learning_path_id']?.toString();
+        if (learningPathId == null || learningPathId.isEmpty) {
+          throw const ApiException(
+            'Learning path job hoàn tất nhưng thiếu kết quả.',
+          );
+        }
+        return _get(
+          '/api/v1/learning-paths/${Uri.encodeComponent(learningPathId)}',
+        );
+      }
+      if (currentStatus == 'failed') {
+        throw ApiException(
+          current['error_message']?.toString() ??
+              'Không thể tạo lộ trình học lúc này.',
+        );
+      }
+      if (attempt > 0) {
+        await Future<void>.delayed(_learningPathPollInterval);
+      }
+      current = await _get(
+        '/api/v1/learning-path-jobs/${Uri.encodeComponent(current['id'].toString())}',
+      );
+      onStatus?.call(current['status']?.toString() ?? 'processing');
+    }
+    throw const ApiException('Tạo lộ trình mất quá lâu. Hãy thử lại sau.');
   }
 
   Future<Map<String, dynamic>> currentLearningPath() {

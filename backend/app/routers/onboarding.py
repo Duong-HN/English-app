@@ -6,6 +6,7 @@ from ..config import Settings, get_settings
 from ..content_catalog import recommended_course_code
 from ..db import get_db
 from ..dependencies import require_learner
+from ..learning_path_service import create_learning_path_record
 from ..learning_spaces import ensure_self_space, get_learning_space
 from ..models import LearnerProfile, LearningPath, LearningSpace, PlacementAttempt, User, utc_now
 from ..schemas import (
@@ -15,7 +16,6 @@ from ..schemas import (
     OnboardingResponse,
     PlacementResultResponse,
 )
-from .learning_paths import create_learning_path_record
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
