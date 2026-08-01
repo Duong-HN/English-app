@@ -138,7 +138,7 @@ def _media_progress_response(progress: LessonProgress | None) -> dict[str, Lesso
                 completed=bool(value.get("completed", False)),
                 updated_at=parsed_updated_at,
             )
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
     return response
 
@@ -415,7 +415,7 @@ def stream_lesson_media(
             if start < 0 or start >= file_size or end < start:
                 raise ValueError
             end = min(end, file_size - 1)
-        except ValueError, IndexError:
+        except (ValueError, IndexError):
             raise HTTPException(
                 status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
                 headers={"Content-Range": f"bytes */{path.stat().st_size}"},

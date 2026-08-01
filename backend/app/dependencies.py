@@ -27,7 +27,7 @@ def get_current_user(
                 detail="Invalid or expired access token",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
-    elif settings.enable_dev_auth and settings.app_env != "production" and dev_user:
+    elif settings.enable_dev_auth and settings.app_env.strip().lower() != "production" and dev_user:
         user_id = dev_user
         user = db.get(User, user_id)
         if user is None:

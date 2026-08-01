@@ -1,5 +1,6 @@
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .db import get_db
@@ -19,13 +20,25 @@ def ensure_self_space(db: Session, user: User, *, commit: bool = False) -> Learn
         )
     )
     if space is None:
-        space = LearningSpace(
-            user_id=user.id,
-            kind=SELF_SPACE_KIND,
-            name="Tự học",
-        )
-        db.add(space)
-        db.flush()
+        try:
+            with db.begin_nested():
+                space = LearningSpace(
+                    user_id=user.id,
+                    kind=SELF_SPACE_KIND,
+                    name="Tự học",
+                )
+                db.add(space)
+                db.flush()
+        except IntegrityError:
+            space = db.scalar(
+                select(LearningSpace).where(
+                    LearningSpace.user_id == user.id,
+                    LearningSpace.kind == SELF_SPACE_KIND,
+                    LearningSpace.class_id.is_(None),
+                )
+            )
+            if space is None:
+                raise
         if commit:
             db.commit()
             db.refresh(space)
@@ -47,17 +60,29 @@ def ensure_class_space(
         )
     )
     if space is None:
-        space = LearningSpace(
-            user_id=user.id,
-            kind=CLASS_SPACE_KIND,
-            class_id=classroom.id,
-            name=f"Lớp · {classroom.name}",
-            daily_minutes=30,
-            current_level=user.level,
-            mode_selected_at=utc_now(),
-        )
-        db.add(space)
-        db.flush()
+        try:
+            with db.begin_nested():
+                space = LearningSpace(
+                    user_id=user.id,
+                    kind=CLASS_SPACE_KIND,
+                    class_id=classroom.id,
+                    name=f"Lớp · {classroom.name}",
+                    daily_minutes=30,
+                    current_level=user.level,
+                    mode_selected_at=utc_now(),
+                )
+                db.add(space)
+                db.flush()
+        except IntegrityError:
+            space = db.scalar(
+                select(LearningSpace).where(
+                    LearningSpace.user_id == user.id,
+                    LearningSpace.kind == CLASS_SPACE_KIND,
+                    LearningSpace.class_id == classroom.id,
+                )
+            )
+            if space is None:
+                raise
         if commit:
             db.commit()
             db.refresh(space)
@@ -81,6 +106,7 @@ def get_learning_space(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Learning space not found",
             )
+        require_space_membership(db, user, space)
     else:
         space = ensure_self_space(db, user, commit=True)
     space.last_active_at = utc_now()
@@ -114,5 +140,6 @@ def current_space_for_user(db: Session, user: User, space_id: str | None) -> Lea
         )
         if space is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learning space not found")
+        require_space_membership(db, user, space)
         return space
     return ensure_self_space(db, user, commit=True)
