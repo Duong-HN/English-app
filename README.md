@@ -179,6 +179,7 @@ Production requirements:
 - [Testing](docs/TEST_PLAN.md)
 - [Scope and limitations](docs/PROJECT_SCOPE_AND_LIMITATIONS.md)
 - [Deployment and CI/CD](docs/DEPLOYMENT.md)
+- [Production roadmap](docs/PRODUCTION_ROADMAP.md)
 - [Git and releases](docs/GIT_WORKFLOW.md)
 - [Codex and LearnMate MCP](docs/MCP.md)
 - [Teacher mode and dashboard plan](plan2.md)

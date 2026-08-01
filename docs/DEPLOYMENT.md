@@ -6,6 +6,8 @@ The workflows in this document package and verify a graduation-project prototype
 not evidence of production readiness. Public deployment additionally requires PostgreSQL integration testing, a separate
 migration job, object storage, rate limiting, monitoring, backups, restore testing and a verified rollback procedure.
 
+The staged target architecture and production exit gates are defined in [Production roadmap](PRODUCTION_ROADMAP.md).
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes and pull requests:
