@@ -116,6 +116,17 @@ Tạo baseline được hội đồng và team chấp nhận trước khi đầu
 
 ### API
 
+### Đã triển khai trên nhánh tích hợp
+
+- Bảng `analysis_jobs` lưu trạng thái queued/processing/succeeded/failed.
+- API bất đồng bộ `POST /api/v1/analysis-jobs/{type}` trả `202 Accepted` và hỗ trợ polling.
+- Worker riêng chạy bằng `python -m app.worker`, claim job bằng `FOR UPDATE SKIP LOCKED` trên PostgreSQL.
+- Idempotency key và fingerprint chống submit trùng hoặc dùng lại key cho payload khác.
+- Retry tối đa 3 lần với backoff; lỗi provider không làm request HTTP phải chờ hoàn tất.
+
+Đây mới là database-backed prototype queue. Trước production phải thay bằng queue được quản lý hoặc Redis/SQS/RabbitMQ,
+thêm dead-letter queue, timeout riêng, jitter, token/cost metrics, prompt version, correlation ID và autoscaling worker.
+
 POST analysis không nên chờ provider hoàn tất. API nên:
 
 1. validate input;
@@ -165,6 +176,10 @@ Worker phải có:
 ## 7. Giai đoạn 3 — Authentication và security
 
 ### Authentication
+
+Prototype đã có in-process rate limit cho login, register và các endpoint AI. Đây chỉ là lớp abuse guard trên từng
+process; production vẫn bắt buộc có distributed rate limit tại gateway/Redis và giới hạn riêng theo user/account,
+IP, route và provider budget.
 
 - Access token ngắn hạn.
 - Refresh token rotation.
@@ -449,4 +464,3 @@ Roadmap này không biến prototype thành production bằng một lần merge.
 - đo được bottleneck trước khi scale;
 - tránh rewrite không cần thiết;
 - nâng cấp từng phần mà không phá vỡ các luồng học tập hiện có.
-

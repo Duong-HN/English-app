@@ -146,6 +146,22 @@ class AnalysisResponse(BaseModel):
     created_at: datetime
 
 
+class AnalysisJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    type: AnalysisType
+    status: Literal["queued", "processing", "succeeded", "failed"]
+    analysis_id: str | None
+    provider: str | None
+    error_message: str | None
+    attempt_count: int
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    updated_at: datetime | None
+
+
 class HistoryResponse(BaseModel):
     items: list[AnalysisResponse]
     total: int

@@ -118,6 +118,55 @@ class Analysis(Base):
     learning_path: Mapped[LearningPath | None] = relationship(back_populates="analyses")
 
 
+class AnalysisJob(Base):
+    """Durable boundary between an HTTP request and an AI execution worker.
+
+    The database queue is intentionally small and portable for the prototype.
+    A production deployment should move claiming and scheduling to a managed
+    queue once worker throughput becomes a measured bottleneck.
+    """
+
+    __tablename__ = "analysis_jobs"
+    __table_args__ = (
+        Index("ix_analysis_jobs_status_available", "status", "available_at"),
+        UniqueConstraint("user_id", "idempotency_key", name="uq_analysis_job_user_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    space_id: Mapped[str] = mapped_column(ForeignKey("learning_spaces.id", ondelete="CASCADE"), index=True)
+    type: Mapped[str] = mapped_column(String(32), index=True)
+    input_text: Mapped[str] = mapped_column(Text)
+    context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    lesson_id: Mapped[str | None] = mapped_column(
+        ForeignKey("lessons.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    learning_path_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_paths.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    task_day: Mapped[int | None] = mapped_column(nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    analysis_id: Mapped[str | None] = mapped_column(
+        ForeignKey("analyses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class LearningPath(Base):
     __tablename__ = "learning_paths"
 

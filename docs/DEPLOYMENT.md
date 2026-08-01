@@ -100,7 +100,11 @@ Expected endpoints:
 - `http://localhost:8000/docs` — Swagger UI.
 
 Compose waits for PostgreSQL, migrates the API schema, then starts the admin web
-after the API reports healthy.
+after the API reports healthy. It also starts a separate `worker` process for the
+asynchronous AI job API. A production platform must deploy the worker as a
+separately scaled workload using the same image and environment, with its own
+restart policy and queue backlog alert; running only the API container leaves
+queued jobs unprocessed.
 
 This Compose environment is for local development and demonstration. It is not a
 production topology and does not provide managed backups, multi-instance shared

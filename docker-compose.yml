@@ -39,6 +39,26 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://learnmate:local-development-password@db:5432/learnmate
+      AUTO_CREATE_SCHEMA: "false"
+      JWT_SECRET: local-docker-secret-change-before-production
+      ENABLE_DEV_AUTH: "false"
+      AI_PROVIDER: mock
+      MEDIA_STORAGE_DIR: /data/media
+      MEDIA_MAX_SIZE_MB: "100"
+    volumes:
+      - learnmate_media:/data/media
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+
   admin:
     build:
       context: ./admin-dashboard

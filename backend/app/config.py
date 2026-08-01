@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     media_storage_dir: str = "./media"
     media_max_size_mb: int = 100
     media_public_base_url: str | None = None
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 60
 
     allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
@@ -57,6 +59,10 @@ class Settings(BaseSettings):
                 raise ValueError("ALLOWED_ORIGINS must contain explicit HTTPS production origins")
             if not self.media_public_base_url or not self.media_public_base_url.startswith("https://"):
                 raise ValueError("MEDIA_PUBLIC_BASE_URL must be an HTTPS URL in production")
+            if not self.rate_limit_enabled:
+                raise ValueError("RATE_LIMIT_ENABLED must be true in production")
+            if self.rate_limit_window_seconds < 1:
+                raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be positive")
         return self
 
 

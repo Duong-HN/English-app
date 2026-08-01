@@ -2,13 +2,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from .config import get_settings
 from .db import Base, engine
+from .rate_limit import RequestRateLimiter
 from .routers import (
     admin,
     analyses,
+    analysis_jobs,
     auth,
     classes,
     content,
@@ -54,6 +56,19 @@ def create_app() -> FastAPI:
         ],
         expose_headers=["Accept-Ranges", "Content-Length", "Content-Range"],
     )
+    limiter = RequestRateLimiter(settings.rate_limit_window_seconds)
+
+    @application.middleware("http")
+    async def rate_limit(request: Request, call_next) -> Response:
+        if settings.rate_limit_enabled and settings.app_env.strip().lower() != "test":
+            allowed, retry_after = limiter.check(request)
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests"},
+                    headers={"Retry-After": str(retry_after)},
+                )
+        return await call_next(request)
 
     @application.middleware("http")
     async def security_headers(request: Request, call_next) -> Response:
@@ -67,6 +82,7 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(analyses.router, prefix="/api/v1")
+    application.include_router(analysis_jobs.router, prefix="/api/v1")
     application.include_router(learning_paths.router, prefix="/api/v1")
     application.include_router(learning_spaces.router, prefix="/api/v1")
     application.include_router(placement.router, prefix="/api/v1")
