@@ -1,8 +1,12 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.models import LearnerProfile, LearningPath
+from app.db import SessionLocal
+from app.models import LearnerProfile, LearningPath, LearningPathJob, utc_now
 from app.placement import PLACEMENT_QUESTIONS, score_answers
+from app.worker import process_learning_path_job
 
 
 def register(client: TestClient, email: str) -> dict:
@@ -112,8 +116,20 @@ def test_onboarding_resumes_and_complete_is_idempotent(client, db_session):
     assert ready.json()["status"] == "needs_learning_path"
 
     completed = client.post("/api/v1/onboarding/complete", headers=headers)
-    assert completed.status_code == 200, completed.text
-    payload = completed.json()
+    assert completed.status_code == 202, completed.text
+    assert completed.json()["operation"] == "onboarding"
+    with SessionLocal() as db:
+        job = db.get(LearningPathJob, completed.json()["id"])
+        assert job is not None
+        job.status = "processing"
+        job.attempt_count = 1
+        job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_learning_path_job(completed.json()["id"]))
+
+    payload_response = client.get("/api/v1/onboarding", headers=headers)
+    assert payload_response.status_code == 200
+    payload = payload_response.json()
     assert payload["status"] == "completed"
     assert payload["goal"] == "work"
     assert payload["daily_minutes"] == 30

@@ -7,7 +7,7 @@ from .ai_schemas import LearningPathResult
 
 AnalysisType = Literal["reading", "writing", "speaking"]
 AnalysisJobStatus = Literal["queued", "processing", "succeeded", "failed"]
-LearningPathJobOperation = Literal["generate", "adapt"]
+LearningPathJobOperation = Literal["generate", "adapt", "onboarding"]
 MediaType = Literal["audio", "video"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 GoalCode = Literal["ielts", "communication", "study_abroad", "work"]

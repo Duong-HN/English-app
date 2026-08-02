@@ -44,7 +44,7 @@ New learner flow is resumable and server-owned:
 - `GET /onboarding` — computed state for the active learning space, saved preferences, latest placement result and current learning path.
 - `PATCH /onboarding/mode` — choose self-study with `{ "kind": "self" }` during first-run onboarding.
 - `PATCH /onboarding/preferences` — save `goal` and/or `daily_minutes`.
-- `POST /onboarding/complete` — idempotently generate the validated seven-day path after preferences and placement exist.
+- `POST /onboarding/complete` — enqueue asynchronous onboarding path generation after preferences and placement exist. Returns `202` with an `onboarding` job; clients poll the job and then reload `GET /onboarding`. If a path already exists, it returns the completed onboarding state directly.
 
 Goal codes are `ielts`, `communication`, `study_abroad` and `work`. Daily time choices are `15`, `20`, `30`,
 `45` and `60`. Computed states also include `needs_mode` and `class_ready`; self-study states are

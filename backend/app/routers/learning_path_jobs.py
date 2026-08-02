@@ -36,6 +36,22 @@ def _adapt_fingerprint(learning_path: LearningPath, space: LearningSpace) -> str
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
+def _onboarding_fingerprint(
+    goal: str,
+    current_level: str,
+    minutes_per_day: int,
+    space: LearningSpace,
+) -> str:
+    payload = {
+        "operation": "onboarding",
+        "goal": goal,
+        "current_level": current_level,
+        "minutes_per_day": minutes_per_day,
+        "space_id": space.id,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
 def _validate_idempotency_key(value: str | None) -> str | None:
     if value is None:
         return None
@@ -165,6 +181,79 @@ def enqueue_learning_path_adaptation(
         idempotency_key=idempotency_key,
         request_fingerprint=fingerprint,
         learning_path_id=learning_path.id,
+    )
+    db.add(job)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if not idempotency_key:
+            raise
+        existing = db.scalar(
+            select(LearningPathJob).where(
+                LearningPathJob.user_id == user.id,
+                LearningPathJob.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is None:
+            raise
+        if existing.request_fingerprint != fingerprint:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Idempotency-Key was already used for a different request",
+            ) from exc
+        return existing
+    db.refresh(job)
+    return job
+
+
+def enqueue_onboarding_learning_path(
+    *,
+    goal: str,
+    current_level: str,
+    minutes_per_day: int,
+    idempotency_key: str | None,
+    db: Session,
+    user: User,
+    space: LearningSpace,
+) -> LearningPathJob:
+    idempotency_key = _validate_idempotency_key(idempotency_key)
+    active = db.scalar(
+        select(LearningPathJob).where(
+            LearningPathJob.user_id == user.id,
+            LearningPathJob.space_id == space.id,
+            LearningPathJob.operation == "onboarding",
+            LearningPathJob.status.in_(("queued", "processing")),
+        )
+    )
+    if active is not None:
+        return active
+
+    fingerprint = _onboarding_fingerprint(goal, current_level, minutes_per_day, space)
+    if idempotency_key:
+        existing = db.scalar(
+            select(LearningPathJob).where(
+                LearningPathJob.user_id == user.id,
+                LearningPathJob.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            if existing.request_fingerprint != fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency-Key was already used for a different request",
+                )
+            return existing
+
+    job = LearningPathJob(
+        user_id=user.id,
+        space_id=space.id,
+        goal=goal,
+        current_level=current_level,
+        minutes_per_day=minutes_per_day,
+        operation="onboarding",
+        idempotency_key=idempotency_key,
+        request_fingerprint=fingerprint,
     )
     db.add(job)
     try:

@@ -17,9 +17,10 @@ from sqlalchemy.orm import Session
 from .ai import build_provider
 from .analysis_service import persist_analysis, resolve_context
 from .config import get_settings
+from .content_catalog import recommended_course_code
 from .db import SessionLocal
 from .learning_path_service import adapt_learning_path_record, create_learning_path_record
-from .models import AnalysisJob, LearningPath, LearningPathJob, LearningSpace, User, utc_now
+from .models import AnalysisJob, LearnerProfile, LearningPath, LearningPathJob, LearningSpace, User, utc_now
 from .schemas import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,12 @@ async def process_learning_path_job(job_id: str) -> None:
                     settings=settings,
                 )
             else:
+                profile = db.get(LearnerProfile, user.id) if job.operation == "onboarding" else None
+                if job.operation == "onboarding" and (
+                    profile is None or not profile.goal or profile.daily_minutes is None
+                ):
+                    _mark_learning_path_failure(db, job, "Onboarding context is unavailable")
+                    return
                 learning_path = await create_learning_path_record(
                     db,
                     user,
@@ -201,6 +208,14 @@ async def process_learning_path_job(job_id: str) -> None:
                     settings=settings,
                 )
                 db.flush()
+                if job.operation == "onboarding":
+                    profile.onboarding_completed_at = utc_now()
+                    profile.updated_at = utc_now()
+                    space.goal = profile.goal
+                    space.daily_minutes = profile.daily_minutes
+                    space.current_level = learning_path.current_level
+                    space.course_code = recommended_course_code(learning_path.current_level, profile.goal)
+                    space.updated_at = utc_now()
             job.status = "succeeded"
             job.learning_path_id = learning_path.id
             job.provider = learning_path.provider
