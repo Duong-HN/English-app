@@ -7,6 +7,7 @@ from .ai_schemas import LearningPathResult
 
 AnalysisType = Literal["reading", "writing", "speaking"]
 AnalysisJobStatus = Literal["queued", "processing", "succeeded", "failed"]
+LearningPathJobOperation = Literal["generate", "adapt"]
 MediaType = Literal["audio", "video"]
 LearningLevel = Literal["A1", "A2", "B1", "B2", "C1"]
 GoalCode = Literal["ielts", "communication", "study_abroad", "work"]
@@ -186,6 +187,7 @@ class LearningPathJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    operation: LearningPathJobOperation
     status: AnalysisJobStatus
     learning_path_id: str | None
     provider: str | None

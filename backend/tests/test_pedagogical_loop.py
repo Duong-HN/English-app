@@ -1,6 +1,11 @@
-from fastapi.testclient import TestClient
+import asyncio
 
-from app.models import LearnerProfile, utc_now
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import LearnerProfile, LearningPathJob, utc_now
+from app.worker import process_learning_path_job
 
 
 def register(client: TestClient, email: str) -> dict:
@@ -145,6 +150,23 @@ def test_task_progress_and_analysis_context_close_the_feedback_loop(client, db_s
     assert current.json()["daily_progress"]["2"]["analysis_id"] == analysis.json()["id"]
 
     adapted = client.post(f"/api/v1/learning-paths/{path['id']}/adapt", headers=headers)
-    assert adapted.status_code == 200, adapted.text
-    assert adapted.json()["daily_progress"]["1"]["completed"] is True
-    assert adapted.json()["daily_progress"]["2"]["completed"] is True
+    assert adapted.status_code == 202, adapted.text
+    assert adapted.json()["operation"] == "adapt"
+    with SessionLocal() as db:
+        job = db.scalar(select(LearningPathJob).where(LearningPathJob.id == adapted.json()["id"]))
+        assert job is not None
+        job.status = "processing"
+        job.attempt_count = 1
+        job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_learning_path_job(adapted.json()["id"]))
+    completed_job = client.get(
+        f"/api/v1/learning-path-jobs/{adapted.json()['id']}",
+        headers=headers,
+    )
+    assert completed_job.status_code == 200
+    assert completed_job.json()["status"] == "succeeded"
+    adapted_path = client.get(f"/api/v1/learning-paths/{path['id']}", headers=headers)
+    assert adapted_path.status_code == 200
+    assert adapted_path.json()["daily_progress"]["1"]["completed"] is True
+    assert adapted_path.json()["daily_progress"]["2"]["completed"] is True

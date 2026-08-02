@@ -155,3 +155,35 @@ async def create_learning_path_record(
     user.updated_at = utc_now()
     db.add(learning_path)
     return learning_path
+
+
+async def adapt_learning_path_record(
+    db: Session,
+    user: User,
+    *,
+    space: LearningSpace,
+    learning_path: LearningPath,
+    settings: Settings,
+) -> LearningPath:
+    """Regenerate an existing path from recent results and completed days."""
+    profile = recent_profile(db, user.id, space.id, learning_path.daily_progress)
+    profile["completed_days"] = [
+        int(day)
+        for day, details in (learning_path.daily_progress or {}).items()
+        if isinstance(details, dict) and details.get("completed")
+    ]
+    provider = build_provider(settings)
+    try:
+        raw_plan = await provider.generate_learning_path(
+            {
+                "goal": learning_path.goal,
+                "current_level": learning_path.current_level,
+                "minutes_per_day": learning_path.minutes_per_day,
+            },
+            profile,
+        )
+        learning_path.plan = LearningPathResult.model_validate(raw_plan).model_dump()
+    except Exception as exc:
+        raise LearningPathGenerationError from exc
+    learning_path.provider = provider.name
+    return learning_path

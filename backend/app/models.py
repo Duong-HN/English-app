@@ -182,6 +182,7 @@ class LearningPathJob(Base):
     goal: Mapped[str] = mapped_column(String(240))
     current_level: Mapped[str] = mapped_column(String(8))
     minutes_per_day: Mapped[int]
+    operation: Mapped[str] = mapped_column(String(16), default="generate", index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     request_fingerprint: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)

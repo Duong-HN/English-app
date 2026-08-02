@@ -18,8 +18,8 @@ from .ai import build_provider
 from .analysis_service import persist_analysis, resolve_context
 from .config import get_settings
 from .db import SessionLocal
-from .learning_path_service import create_learning_path_record
-from .models import AnalysisJob, LearningPathJob, LearningSpace, User, utc_now
+from .learning_path_service import adapt_learning_path_record, create_learning_path_record
+from .models import AnalysisJob, LearningPath, LearningPathJob, LearningSpace, User, utc_now
 from .schemas import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -172,16 +172,35 @@ async def process_learning_path_job(job_id: str) -> None:
             _mark_learning_path_failure(db, job, "Learning-path context is unavailable")
             return
         try:
-            learning_path = await create_learning_path_record(
-                db,
-                user,
-                space=space,
-                goal=job.goal,
-                current_level=job.current_level,
-                minutes_per_day=job.minutes_per_day,
-                settings=settings,
-            )
-            db.flush()
+            if job.operation == "adapt":
+                learning_path = db.scalar(
+                    select(LearningPath).where(
+                        LearningPath.id == job.learning_path_id,
+                        LearningPath.user_id == user.id,
+                        LearningPath.space_id == space.id,
+                    )
+                )
+                if learning_path is None:
+                    _mark_learning_path_failure(db, job, "Learning path context is unavailable")
+                    return
+                await adapt_learning_path_record(
+                    db,
+                    user,
+                    space=space,
+                    learning_path=learning_path,
+                    settings=settings,
+                )
+            else:
+                learning_path = await create_learning_path_record(
+                    db,
+                    user,
+                    space=space,
+                    goal=job.goal,
+                    current_level=job.current_level,
+                    minutes_per_day=job.minutes_per_day,
+                    settings=settings,
+                )
+                db.flush()
             job.status = "succeeded"
             job.learning_path_id = learning_path.id
             job.provider = learning_path.provider

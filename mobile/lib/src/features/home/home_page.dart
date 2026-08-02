@@ -226,6 +226,7 @@ class _LearningPathPageState extends State<_LearningPathPage> {
   String _generationStatus = 'idle';
   bool _placementSubmitting = false;
   bool _adapting = false;
+  String _adaptStatus = 'idle';
   int? _progressDay;
   List<Map<String, dynamic>>? _placementQuestions;
   final Map<String, String> _placementAnswers = {};
@@ -398,14 +399,35 @@ class _LearningPathPageState extends State<_LearningPathPage> {
     setState(() {
       _adapting = true;
       _error = null;
+      _adaptStatus = 'processing';
     });
     try {
       final result = await widget.apiClient.adaptLearningPath(
         path['id'].toString(),
+        onStatus: (status) {
+          if (mounted) setState(() => _adaptStatus = status);
+        },
       );
-      if (mounted) setState(() => _learningPath = result);
+      if (mounted) {
+        setState(() {
+          _learningPath = result;
+          _adaptStatus = 'succeeded';
+        });
+      }
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _adaptStatus = 'failed';
+          _error = exception.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _adaptStatus = 'failed';
+          _error = 'Không thể kết nối máy chủ.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _adapting = false);
     }
@@ -522,10 +544,19 @@ class _LearningPathPageState extends State<_LearningPathPage> {
           if (_generationStatus != 'idle') ...[
             const SizedBox(height: 14),
             _LearningPathStatusCard(
+              labelPrefix: 'Trạng thái tạo lộ trình',
               status: _generationStatus,
               onRetry: _generationStatus == 'failed' && !_generating
                   ? _generate
                   : null,
+            ),
+          ],
+          if (_adaptStatus != 'idle' && plan != null) ...[
+            const SizedBox(height: 14),
+            _LearningPathStatusCard(
+              labelPrefix: 'Trạng thái điều chỉnh lộ trình',
+              status: _adaptStatus,
+              onRetry: _adaptStatus == 'failed' && !_adapting ? _adapt : null,
             ),
           ],
           if (_error != null) ...[
@@ -570,9 +601,14 @@ class _LearningPathPageState extends State<_LearningPathPage> {
 }
 
 class _LearningPathStatusCard extends StatelessWidget {
-  const _LearningPathStatusCard({required this.status, this.onRetry});
+  const _LearningPathStatusCard({
+    required this.status,
+    required this.labelPrefix,
+    this.onRetry,
+  });
 
   final String status;
+  final String labelPrefix;
   final VoidCallback? onRetry;
 
   @override
@@ -594,7 +630,7 @@ class _LearningPathStatusCard extends StatelessWidget {
     };
     return Semantics(
       liveRegion: true,
-      label: 'Trạng thái tạo lộ trình: $label',
+      label: '$labelPrefix: $label',
       child: Card(
         key: const Key('learning-path-status'),
         child: Padding(

@@ -152,6 +152,29 @@ class ApiClient {
       },
     );
 
+    return _pollLearningPathJob(job, onStatus: onStatus);
+  }
+
+  Future<Map<String, dynamic>> adaptLearningPath(
+    String id, {
+    void Function(String status)? onStatus,
+  }) async {
+    final encodedId = Uri.encodeComponent(id);
+    final job = await _post(
+      '/api/v1/learning-path-jobs/$encodedId/adapt',
+      body: const {},
+      extraHeaders: {
+        'Idempotency-Key':
+            'mobile-learning-path-adapt-$encodedId-${DateTime.now().microsecondsSinceEpoch}',
+      },
+    );
+    return _pollLearningPathJob(job, onStatus: onStatus);
+  }
+
+  Future<Map<String, dynamic>> _pollLearningPathJob(
+    Map<String, dynamic> job, {
+    void Function(String status)? onStatus,
+  }) async {
     var current = job;
     onStatus?.call(current['status']?.toString() ?? 'queued');
     for (var attempt = 0; attempt < _learningPathMaxPolls; attempt++) {
@@ -201,10 +224,6 @@ class ApiClient {
         ...?(note == null ? null : {'note': note}),
       },
     );
-  }
-
-  Future<Map<String, dynamic>> adaptLearningPath(String id) {
-    return _post('/api/v1/learning-paths/$id/adapt', body: const {});
   }
 
   Future<Map<String, dynamic>> placementTest() =>
