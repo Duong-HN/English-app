@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
+from job_helpers import complete_legacy_learning_path
 from sqlalchemy import func, select
 
 from app.models import Analysis, Assignment, LearnerProfile, User, utc_now
@@ -206,12 +207,11 @@ def test_assignment_analysis_feedback_and_space_isolation(client, db_session):
     assert profile is not None
     profile.onboarding_completed_at = utc_now()
     db_session.commit()
-    path = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=learner_headers,
-        json={"goal": "Improve English for work", "current_level": "B1", "minutes_per_day": 30},
+    path = complete_legacy_learning_path(
+        client,
+        learner["access_token"],
+        {"goal": "Improve English for work", "current_level": "B1", "minutes_per_day": 30},
     )
-    assert path.status_code == 201
 
     invalid_skill = client.post(
         f"/api/v1/classes/{classroom['id']}/assignments",
@@ -261,7 +261,7 @@ def test_assignment_analysis_feedback_and_space_isolation(client, db_session):
     assert home.json()["class_assignment_minutes"] == 0
     assert home.json()["remaining_personal_minutes"] == 30
     assert home.json()["total_planned_minutes"] == 30
-    assert home.json()["personal_learning_path"]["id"] == path.json()["id"]
+    assert home.json()["personal_learning_path"]["id"] == path["id"]
     assert home.json()["next_personal_task"] is not None
 
     class_headers = {
@@ -353,20 +353,19 @@ def test_assignment_analysis_feedback_and_space_isolation(client, db_session):
     )
     assert own_assignment["teacher_feedback"].startswith("Clear tone")
 
-    regenerated = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=learner_headers,
-        json={
+    regenerated = complete_legacy_learning_path(
+        client,
+        learner["access_token"],
+        {
             "goal": "Prepare for study abroad",
             "current_level": "B2",
             "minutes_per_day": 60,
         },
     )
     refreshed_home = client.get("/api/v1/home", headers=learner_headers)
-    assert regenerated.status_code == 201
     assert refreshed_home.json()["goal"] == "Prepare for study abroad"
     assert refreshed_home.json()["daily_minutes"] == 60
-    assert refreshed_home.json()["personal_learning_path"]["id"] == regenerated.json()["id"]
+    assert refreshed_home.json()["personal_learning_path"]["id"] == regenerated["id"]
 
     late_assignment = client.post(
         f"/api/v1/classes/{classroom['id']}/assignments",

@@ -152,6 +152,30 @@ class ApiClient {
       },
     );
 
+    return _pollLearningPathJob(job, onStatus: onStatus);
+  }
+
+  Future<Map<String, dynamic>> adaptLearningPath(
+    String id, {
+    void Function(String status)? onStatus,
+  }) async {
+    final encodedId = Uri.encodeComponent(id);
+    final job = await _post(
+      '/api/v1/learning-path-jobs/$encodedId/adapt',
+      body: const {},
+      extraHeaders: {
+        'Idempotency-Key':
+            'mobile-learning-path-adapt-$encodedId-${DateTime.now().microsecondsSinceEpoch}',
+      },
+    );
+    return _pollLearningPathJob(job, onStatus: onStatus);
+  }
+
+  Future<Map<String, dynamic>> _pollLearningPathJob(
+    Map<String, dynamic> job, {
+    void Function(String status)? onStatus,
+    bool fetchLearningPath = true,
+  }) async {
     var current = job;
     onStatus?.call(current['status']?.toString() ?? 'queued');
     for (var attempt = 0; attempt < _learningPathMaxPolls; attempt++) {
@@ -163,6 +187,7 @@ class ApiClient {
             'Learning path job hoàn tất nhưng thiếu kết quả.',
           );
         }
+        if (!fetchLearningPath) return current;
         return _get(
           '/api/v1/learning-paths/${Uri.encodeComponent(learningPathId)}',
         );
@@ -203,10 +228,6 @@ class ApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> adaptLearningPath(String id) {
-    return _post('/api/v1/learning-paths/$id/adapt', body: const {});
-  }
-
   Future<Map<String, dynamic>> placementTest() =>
       _get('/api/v1/placement-test');
 
@@ -241,8 +262,24 @@ class ApiClient {
     return _patch('/api/v1/onboarding/mode', body: const {'kind': 'self'});
   }
 
-  Future<Map<String, dynamic>> completeOnboarding() {
-    return _post('/api/v1/onboarding/complete', body: const {});
+  Future<Map<String, dynamic>> completeOnboarding({
+    void Function(String status)? onStatus,
+  }) async {
+    final response = await _post(
+      '/api/v1/onboarding/complete',
+      body: const {},
+      extraHeaders: {
+        'Idempotency-Key':
+            'mobile-onboarding-${DateTime.now().microsecondsSinceEpoch}',
+      },
+    );
+    if (response['operation']?.toString() != 'onboarding') return response;
+    await _pollLearningPathJob(
+      response,
+      onStatus: onStatus,
+      fetchLearningPath: false,
+    );
+    return _get('/api/v1/onboarding');
   }
 
   Future<List<Map<String, dynamic>>> learningSpaces() async {

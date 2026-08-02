@@ -10,9 +10,11 @@ Base path: `/api/v1`
 
 ## Learning analysis
 
-- `POST /analyses/reading`
-- `POST /analyses/writing`
-- `POST /analyses/speaking`
+- `POST /analysis-jobs/reading`
+- `POST /analysis-jobs/writing`
+- `POST /analysis-jobs/speaking`
+- `GET /analysis-jobs/{job_id}` — poll until `status` is `succeeded` or `failed`.
+- `POST /analyses/{reading|writing|speaking}` — legacy compatibility alias; it also returns `202` with an analysis job.
 - `GET /analyses?limit=20&offset=0`
 - `GET /analyses/{id}`
 - `DELETE /analyses/{id}`
@@ -37,6 +39,10 @@ score requires a separately configured audio assessment provider and is not synt
 When `learning_path_id` and `task_day` are supplied, the analysis is attached to that task and marks the day
 complete after a successful analysis.
 
+All analysis creation endpoints are asynchronous. The HTTP request only validates the learning context and queues a
+job; the AI provider runs in the worker. Clients should poll the job and then fetch `GET /analyses/{id}` when
+`analysis_id` is available. `Idempotency-Key` can be sent to safely retry queue requests.
+
 ## Onboarding
 
 New learner flow is resumable and server-owned:
@@ -44,7 +50,7 @@ New learner flow is resumable and server-owned:
 - `GET /onboarding` — computed state for the active learning space, saved preferences, latest placement result and current learning path.
 - `PATCH /onboarding/mode` — choose self-study with `{ "kind": "self" }` during first-run onboarding.
 - `PATCH /onboarding/preferences` — save `goal` and/or `daily_minutes`.
-- `POST /onboarding/complete` — idempotently generate the validated seven-day path after preferences and placement exist.
+- `POST /onboarding/complete` — enqueue asynchronous onboarding path generation after preferences and placement exist. Returns `202` with an `onboarding` job; clients poll the job and then reload `GET /onboarding`. If a path already exists, it returns the completed onboarding state directly.
 
 Goal codes are `ielts`, `communication`, `study_abroad` and `work`. Daily time choices are `15`, `20`, `30`,
 `45` and `60`. Computed states also include `needs_mode` and `class_ready`; self-study states are
@@ -85,13 +91,14 @@ CEFR starting level, per-skill correct/total/percentage values and `test_version
 ## Personalized learning paths
 
 - `POST /learning-path-jobs` — enqueue a seven-day path generation job. The request returns `202` and a job id; clients poll the job until it succeeds or fails.
+- `POST /learning-path-jobs/{learning_path_id}/adapt` — enqueue adaptation of an existing path from recent results and completed days.
 - `GET /learning-path-jobs/{job_id}` — read an owned generation job and its resulting `learning_path_id`.
 - `GET /learning-paths/{id}` — read an owned learning path by id after a generation job succeeds.
-- `POST /learning-paths/generate` — legacy synchronous endpoint retained temporarily for compatibility; new clients must use `learning-path-jobs`.
+- `POST /learning-paths/generate` — legacy URL retained as an asynchronous compatibility alias; it returns `202` with a `generate` job. New clients should use `learning-path-jobs`.
 - `GET /learning-paths/current` — latest path owned by the authenticated learner.
 - `GET /learning-paths?limit=20&offset=0` — learner-owned path history.
 - `PATCH /learning-paths/{id}/days/{day}` — mark a daily task complete/incomplete and optionally save a note.
-- `POST /learning-paths/{id}/adapt` — regenerate tasks from recent results and current completion progress.
+- `POST /learning-paths/{id}/adapt` — compatibility alias for the asynchronous adaptation job; returns `202`.
 - `DELETE /learning-paths/{id}` — ownership-safe deletion.
 
 Generate request:

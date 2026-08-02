@@ -173,6 +173,14 @@ class LearningPathJob(Base):
     __tablename__ = "learning_path_jobs"
     __table_args__ = (
         Index("ix_learning_path_jobs_status_available", "status", "available_at"),
+        Index(
+            "uq_learning_path_job_active_onboarding",
+            "user_id",
+            "space_id",
+            unique=True,
+            sqlite_where=text("operation = 'onboarding' AND status IN ('queued', 'processing')"),
+            postgresql_where=text("operation = 'onboarding' AND status IN ('queued', 'processing')"),
+        ),
         UniqueConstraint("user_id", "idempotency_key", name="uq_learning_path_job_user_idempotency"),
     )
 
@@ -182,6 +190,7 @@ class LearningPathJob(Base):
     goal: Mapped[str] = mapped_column(String(240))
     current_level: Mapped[str] = mapped_column(String(8))
     minutes_per_day: Mapped[int]
+    operation: Mapped[str] = mapped_column(String(16), default="generate", index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     request_fingerprint: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)

@@ -156,7 +156,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/reading"
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/reading"
           }
         },
         {
@@ -178,7 +178,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/writing"
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/writing"
           }
         },
         {
@@ -200,7 +200,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/speaking",
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/speaking",
             "description": "Evaluates transcript relevance, grammar and vocabulary; it does not claim to grade pronunciation."
           }
         },
@@ -236,7 +236,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/learning-paths/generate"
+            "url": "{{baseUrl}}/api/v1/learning-path-jobs"
           },
           "event": [
             {
@@ -244,11 +244,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Learning path has seven tasks', function () {",
-                  "  pm.response.to.have.status(201);",
+                  "pm.test('Learning path job was queued', function () {",
+                  "  pm.response.to.have.status(202);",
                   "  const body = pm.response.json();",
-                  "  pm.expect(body.plan.daily_tasks).to.have.lengthOf(7);",
-                  "  pm.environment.set('learningPathId', body.id);",
+                  "  pm.expect(body.operation).to.equal('generate');",
+                  "  pm.environment.set('learningPathJobId', body.id);",
                   "});"
                 ]
               }

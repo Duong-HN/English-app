@@ -82,3 +82,35 @@ def test_learning_path_job_is_idempotent_and_processed_by_worker(client):
     assert path.status_code == 200, path.text
     assert path.json()["goal"] == payload["goal"]
     assert len(path.json()["plan"]["daily_tasks"]) == 7
+
+    adapt_headers = {
+        "Authorization": f"Bearer {session['access_token']}",
+        "Idempotency-Key": "learning-path-adapt-test-1",
+    }
+    adaptation = client.post(
+        f"/api/v1/learning-path-jobs/{completed.json()['learning_path_id']}/adapt",
+        headers=adapt_headers,
+    )
+    assert adaptation.status_code == 202, adaptation.text
+    assert adaptation.json()["operation"] == "adapt"
+    duplicate_adaptation = client.post(
+        f"/api/v1/learning-path-jobs/{completed.json()['learning_path_id']}/adapt",
+        headers=adapt_headers,
+    )
+    assert duplicate_adaptation.status_code == 202
+    assert duplicate_adaptation.json()["id"] == adaptation.json()["id"]
+
+    with SessionLocal() as db:
+        job = db.get(LearningPathJob, adaptation.json()["id"])
+        assert job is not None
+        job.status = "processing"
+        job.attempt_count = 1
+        job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_learning_path_job(adaptation.json()["id"]))
+    completed_adaptation = client.get(
+        f"/api/v1/learning-path-jobs/{adaptation.json()['id']}",
+        headers=adapt_headers,
+    )
+    assert completed_adaptation.status_code == 200
+    assert completed_adaptation.json()["status"] == "succeeded"

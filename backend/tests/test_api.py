@@ -1,3 +1,4 @@
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 
 
@@ -66,13 +67,32 @@ def test_analysis_requires_authentication(client):
     assert response.status_code == 401
 
 
+def test_legacy_analysis_alias_only_queues_work(client, monkeypatch):
+    session = register(client, "analysis-async-alias@example.com")
+
+    def unexpected_provider_call(_settings):
+        raise AssertionError("legacy analysis endpoint must not invoke the AI provider")
+
+    monkeypatch.setattr("app.worker.build_provider", unexpected_provider_call)
+    response = client.post(
+        "/api/v1/analyses/reading",
+        headers=auth_header(session["access_token"]),
+        json={"input_text": "The learner practices English every day."},
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["status"] == "queued"
+    assert response.json()["analysis_id"] is None
+
+
 def test_analysis_is_saved_and_deleted(client):
     session = register(client, "analysis@example.com")
     headers = auth_header(session["access_token"])
-    created = client.post(
-        "/api/v1/analyses/reading",
-        json={"input_text": "The learner practices English every day."},
-        headers=headers,
+    created = complete_legacy_analysis(
+        client,
+        session["access_token"],
+        "reading",
+        {"input_text": "The learner practices English every day."},
     )
     assert created.status_code == 200
     assert created.json()["provider"] == "mock"
@@ -90,10 +110,11 @@ def test_analysis_is_saved_and_deleted(client):
 def test_histories_are_isolated_by_user(client):
     first = register(client, "first@example.com")
     second = register(client, "second@example.com")
-    client.post(
-        "/api/v1/analyses/writing",
-        json={"input_text": "I practice English because it helps my future career."},
-        headers=auth_header(first["access_token"]),
+    complete_legacy_analysis(
+        client,
+        first["access_token"],
+        "writing",
+        {"input_text": "I practice English because it helps my future career."},
     )
     second_history = client.get(
         "/api/v1/analyses",
@@ -119,7 +140,7 @@ def test_analysis_validates_learning_context_before_calling_ai(client, monkeypat
     def unexpected_provider_call(_settings):
         raise AssertionError("AI provider must not run for an unauthorized or missing learning path")
 
-    monkeypatch.setattr("app.routers.analyses.build_provider", unexpected_provider_call)
+    monkeypatch.setattr("app.worker.build_provider", unexpected_provider_call)
     response = client.post(
         "/api/v1/analyses/writing",
         headers=auth_header(session["access_token"]),

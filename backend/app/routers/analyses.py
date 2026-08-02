@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..ai import build_provider
-from ..analysis_service import persist_analysis, resolve_context
-from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
 from ..learning_spaces import get_learning_space
 from ..models import Analysis, LearningSpace, User
+from ..routers.analysis_jobs import enqueue_analysis_job
 from ..schemas import (
+    AnalysisJobResponse,
     AnalysisRequest,
     AnalysisResponse,
     AnalysisType,
@@ -20,27 +19,21 @@ from ..schemas import (
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
 
-@router.post("/{analysis_type}", response_model=AnalysisResponse)
-async def create_analysis(
+@router.post(
+    "/{analysis_type}",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_analysis(
     analysis_type: AnalysisType,
     request: AnalysisRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     space: LearningSpace = Depends(get_learning_space),
-    settings: Settings = Depends(get_settings),
 ):
-    context = resolve_context(db, request, user, space)
-
-    try:
-        provider = build_provider(settings)
-        result = await provider.analyze(analysis_type, request.input_text, context=context.lesson_context)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider failed") from exc
-
-    analysis = persist_analysis(db, user, space, analysis_type, request, context, result, provider.name)
-    db.commit()
-    db.refresh(analysis)
-    return AnalysisResponse.model_validate(analysis)
+    """Compatibility alias for clients that still post to /analyses/{type}."""
+    return enqueue_analysis_job(analysis_type, request, idempotency_key, db, user, space)
 
 
 @router.get("", response_model=HistoryResponse)

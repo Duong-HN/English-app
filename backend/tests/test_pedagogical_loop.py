@@ -1,6 +1,13 @@
-from fastapi.testclient import TestClient
+import asyncio
 
-from app.models import LearnerProfile, utc_now
+from analysis_job_helpers import complete_legacy_analysis
+from fastapi.testclient import TestClient
+from job_helpers import complete_legacy_learning_path
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import LearnerProfile, LearningPathJob, utc_now
+from app.worker import process_learning_path_job
 
 
 def register(client: TestClient, email: str) -> dict:
@@ -17,13 +24,11 @@ def auth_header(token: str) -> dict[str, str]:
 
 
 def generate_path(client: TestClient, token: str) -> dict:
-    response = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=auth_header(token),
-        json={"goal": "Improve English for work", "current_level": "A1", "minutes_per_day": 30},
+    return complete_legacy_learning_path(
+        client,
+        token,
+        {"goal": "Improve English for work", "current_level": "A1", "minutes_per_day": 30},
     )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def allow_path_regeneration(db_session, user_id: str) -> None:
@@ -91,10 +96,11 @@ def test_placement_test_sets_verified_level_for_future_paths(client, db_session)
 def test_reading_vocabulary_is_saved_and_can_be_reviewed(client):
     session = register(client, "vocabulary-loop@example.com")
     headers = auth_header(session["access_token"])
-    analysis = client.post(
-        "/api/v1/analyses/reading",
-        headers=headers,
-        json={"input_text": "The learner practices English every day."},
+    analysis = complete_legacy_analysis(
+        client,
+        session["access_token"],
+        "reading",
+        {"input_text": "The learner practices English every day."},
     )
     assert analysis.status_code == 200, analysis.text
 
@@ -126,10 +132,11 @@ def test_task_progress_and_analysis_context_close_the_feedback_loop(client, db_s
     assert completed.status_code == 200
     assert completed.json()["daily_progress"]["1"]["completed"] is True
 
-    analysis = client.post(
-        "/api/v1/analyses/writing",
-        headers=headers,
-        json={
+    analysis = complete_legacy_analysis(
+        client,
+        session["access_token"],
+        "writing",
+        {
             "input_text": "I practice English every day to communicate better at work.",
             "learning_path_id": path["id"],
             "task_day": 2,
@@ -145,6 +152,23 @@ def test_task_progress_and_analysis_context_close_the_feedback_loop(client, db_s
     assert current.json()["daily_progress"]["2"]["analysis_id"] == analysis.json()["id"]
 
     adapted = client.post(f"/api/v1/learning-paths/{path['id']}/adapt", headers=headers)
-    assert adapted.status_code == 200, adapted.text
-    assert adapted.json()["daily_progress"]["1"]["completed"] is True
-    assert adapted.json()["daily_progress"]["2"]["completed"] is True
+    assert adapted.status_code == 202, adapted.text
+    assert adapted.json()["operation"] == "adapt"
+    with SessionLocal() as db:
+        job = db.scalar(select(LearningPathJob).where(LearningPathJob.id == adapted.json()["id"]))
+        assert job is not None
+        job.status = "processing"
+        job.attempt_count = 1
+        job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_learning_path_job(adapted.json()["id"]))
+    completed_job = client.get(
+        f"/api/v1/learning-path-jobs/{adapted.json()['id']}",
+        headers=headers,
+    )
+    assert completed_job.status_code == 200
+    assert completed_job.json()["status"] == "succeeded"
+    adapted_path = client.get(f"/api/v1/learning-paths/{path['id']}", headers=headers)
+    assert adapted_path.status_code == 200
+    assert adapted_path.json()["daily_progress"]["1"]["completed"] is True
+    assert adapted_path.json()["daily_progress"]["2"]["completed"] is True

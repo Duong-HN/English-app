@@ -15,6 +15,7 @@ void main() {
     tester,
   ) async {
     var placementSubmitted = false;
+    var onboardingCompleted = false;
     var completed = false;
     final questions = List.generate(
       20,
@@ -31,7 +32,14 @@ void main() {
         if (request.method == 'GET' &&
             request.url.path == '/api/v1/onboarding') {
           return jsonResponse(
-            placementSubmitted
+                onboardingCompleted
+                ? {
+                    'status': 'completed',
+                    'goal': 'ielts',
+                    'daily_minutes': 30,
+                    'learning_path': {'id': 'path-1'},
+                  }
+                : placementSubmitted
                 ? {
                     'status': 'needs_learning_path',
                     'goal': 'ielts',
@@ -70,11 +78,21 @@ void main() {
         }
         if (request.method == 'POST' &&
             request.url.path == '/api/v1/onboarding/complete') {
+          onboardingCompleted = true;
           return jsonResponse({
-            'status': 'completed',
-            'goal': 'ielts',
-            'daily_minutes': 30,
-            'learning_path': {'id': 'path-1'},
+            'id': 'onboarding-job-1',
+            'operation': 'onboarding',
+            'status': 'queued',
+            'learning_path_id': null,
+          }, 202);
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/learning-path-jobs/onboarding-job-1') {
+          return jsonResponse({
+            'id': 'onboarding-job-1',
+            'operation': 'onboarding',
+            'status': 'succeeded',
+            'learning_path_id': 'path-1',
           });
         }
         return jsonResponse({'detail': 'Unexpected request'}, 500);

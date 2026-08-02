@@ -1,3 +1,4 @@
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
@@ -121,15 +122,18 @@ def test_curriculum_and_analysis_progress_are_scoped_to_space(client, db_session
     class_curriculum = client.get("/api/v1/content/courses", headers=class_headers)
     assert class_curriculum.status_code == 409
 
-    self_analysis = client.post(
-        "/api/v1/analyses/reading",
-        headers=headers(learner),
-        json={"input_text": "A short self-study reading sample."},
+    self_analysis = complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "reading",
+        {"input_text": "A short self-study reading sample."},
     )
-    class_analysis = client.post(
-        "/api/v1/analyses/reading",
-        headers=class_headers,
-        json={"input_text": "A short class reading sample."},
+    class_analysis = complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "reading",
+        {"input_text": "A short class reading sample."},
+        extra_headers=class_headers,
     )
     assert self_analysis.status_code == 200, self_analysis.text
     assert class_analysis.status_code == 200, class_analysis.text

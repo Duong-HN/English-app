@@ -1,21 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import Settings, get_settings
-from ..content_catalog import recommended_course_code
 from ..db import get_db
 from ..dependencies import require_learner
-from ..learning_path_service import create_learning_path_record
 from ..learning_spaces import ensure_self_space, get_learning_space
 from ..models import LearnerProfile, LearningPath, LearningSpace, PlacementAttempt, User, utc_now
 from ..schemas import (
+    LearningPathJobResponse,
     LearningPathResponse,
     LearningSpaceModeUpdate,
     OnboardingPreferencesUpdate,
     OnboardingResponse,
     PlacementResultResponse,
 )
+from .learning_path_jobs import enqueue_onboarding_learning_path
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -212,12 +212,15 @@ def update_preferences(
     )
 
 
-@router.post("/complete", response_model=OnboardingResponse)
-async def complete_onboarding(
+@router.post(
+    "/complete",
+    response_model=OnboardingResponse | LearningPathJobResponse,
+)
+def complete_onboarding(
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     user: User = Depends(require_learner),
     space: LearningSpace = Depends(get_learning_space),
-    settings: Settings = Depends(get_settings),
 ):
     if space.kind == "class":
         profile = db.get(LearnerProfile, user.id) or LearnerProfile(user_id=user.id)
@@ -245,24 +248,19 @@ async def complete_onboarding(
             detail="Placement test is required before completing onboarding",
         )
 
-    learning_path = await create_learning_path_record(
-        db,
-        user,
-        space=space,
-        goal=GOAL_LABELS.get(profile.goal, profile.goal),
-        current_level=placement.level,
-        minutes_per_day=profile.daily_minutes,
-        settings=settings,
-    )
-    profile.onboarding_completed_at = utc_now()
-    profile.updated_at = utc_now()
-    space.course_code = recommended_course_code(placement.level, profile.goal)
-    space.current_level = placement.level
     space.goal = profile.goal
     space.daily_minutes = profile.daily_minutes
     space.updated_at = utc_now()
-    db.commit()
-    db.refresh(profile)
-    db.refresh(learning_path)
-    db.refresh(space)
-    return _response(profile, placement, learning_path, space, _available_spaces(db, user))
+    job = enqueue_onboarding_learning_path(
+        goal=GOAL_LABELS.get(profile.goal, profile.goal),
+        current_level=placement.level,
+        minutes_per_day=profile.daily_minutes,
+        idempotency_key=idempotency_key,
+        db=db,
+        user=user,
+        space=space,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content=LearningPathJobResponse.model_validate(job).model_dump(mode="json"),
+    )

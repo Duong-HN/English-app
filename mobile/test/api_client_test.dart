@@ -163,6 +163,52 @@ void main() {
     },
   );
 
+  test('learning path adaptation uses a job and polls to the updated path', () async {
+    final requests = <http.Request>[];
+    final statuses = <String>[];
+    final client = ApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.method == 'POST') {
+          expect(request.url.path, '/api/v1/learning-path-jobs/path-1/adapt');
+          expect(
+            request.headers['Idempotency-Key'],
+            startsWith('mobile-learning-path-adapt-path-1-'),
+          );
+          return jsonResponse({
+            'id': 'adapt-job-1',
+            'operation': 'adapt',
+            'status': 'queued',
+            'learning_path_id': 'path-1',
+          }, 202);
+        }
+        if (request.url.path == '/api/v1/learning-path-jobs/adapt-job-1') {
+          return jsonResponse({
+            'id': 'adapt-job-1',
+            'operation': 'adapt',
+            'status': 'succeeded',
+            'learning_path_id': 'path-1',
+          }, 200);
+        }
+        return jsonResponse({'id': 'path-1', 'plan': <String, dynamic>{}}, 200);
+      }),
+    )..accessToken = 'learner-token';
+
+    final response = await client.adaptLearningPath(
+      'path-1',
+      onStatus: statuses.add,
+    );
+
+    expect(requests.map((request) => request.url.path), [
+      '/api/v1/learning-path-jobs/path-1/adapt',
+      '/api/v1/learning-path-jobs/adapt-job-1',
+      '/api/v1/learning-paths/path-1',
+    ]);
+    expect(statuses, ['queued', 'succeeded']);
+    expect(response['id'], 'path-1');
+  });
+
   test('onboarding preferences use the learner contract', () async {
     late http.Request captured;
     final client = ApiClient(

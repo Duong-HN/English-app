@@ -30,12 +30,7 @@ def _fingerprint(analysis_type: str, request: AnalysisRequest, space: LearningSp
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-@router.post(
-    "/{analysis_type}",
-    response_model=AnalysisJobResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-def enqueue_analysis(
+def enqueue_analysis_job(
     analysis_type: AnalysisType,
     request: AnalysisRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -100,6 +95,22 @@ def enqueue_analysis(
         return existing
     db.refresh(job)
     return job
+
+
+@router.post(
+    "/{analysis_type}",
+    response_model=AnalysisJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def enqueue_analysis(
+    analysis_type: AnalysisType,
+    request: AnalysisRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    space: LearningSpace = Depends(get_learning_space),
+):
+    return enqueue_analysis_job(analysis_type, request, idempotency_key, db, user, space)
 
 
 @router.get("/{job_id}", response_model=AnalysisJobResponse)

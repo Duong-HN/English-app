@@ -1,26 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..ai import build_provider
-from ..ai_schemas import LearningPathResult
-from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..learning_path_service import (
-    LearningPathGenerationError,
-    create_learning_path_record,
-    recent_profile,
-)
 from ..learning_spaces import get_learning_space
-from ..models import LearnerProfile, LearningPath, LearningSpace, User, utc_now
+from ..models import LearningPath, LearningSpace, User, utc_now
 from ..schemas import (
     DailyProgressUpdate,
     LearningPathGenerateRequest,
+    LearningPathJobResponse,
     LearningPathListResponse,
     LearningPathResponse,
     MessageResponse,
 )
+from .learning_path_jobs import enqueue_learning_path, enqueue_learning_path_adaptation
 
 router = APIRouter(prefix="/learning-paths", tags=["learning paths"])
 
@@ -29,40 +24,25 @@ def _path_response(learning_path: LearningPath) -> LearningPathResponse:
     return LearningPathResponse.model_validate(learning_path)
 
 
-@router.post("/generate", response_model=LearningPathResponse, status_code=status.HTTP_201_CREATED)
-async def generate_learning_path(
+@router.post("/generate", response_model=LearningPathJobResponse)
+def generate_learning_path(
     request: LearningPathGenerateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     space: LearningSpace = Depends(get_learning_space),
-    settings: Settings = Depends(get_settings),
 ):
-    if space.kind != "self":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Class spaces use teacher-assigned content",
-        )
-    profile = db.get(LearnerProfile, user.id)
-    if profile is not None and profile.onboarding_completed_at is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Complete onboarding before generating another learning path",
-        )
-    try:
-        learning_path = await create_learning_path_record(
-            db,
-            user,
-            space=space,
-            goal=request.goal,
-            current_level=request.current_level,
-            minutes_per_day=request.minutes_per_day,
-            settings=settings,
-        )
-    except LearningPathGenerationError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider failed") from exc
-    db.commit()
-    db.refresh(learning_path)
-    return _path_response(learning_path)
+    job = enqueue_learning_path(
+        request=request,
+        idempotency_key=idempotency_key,
+        db=db,
+        user=user,
+        space=space,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content=LearningPathJobResponse.model_validate(job).model_dump(mode="json"),
+    )
 
 
 @router.get("/current", response_model=LearningPathResponse)
@@ -162,47 +142,25 @@ def update_daily_progress(
     return _path_response(learning_path)
 
 
-@router.post("/{learning_path_id}/adapt", response_model=LearningPathResponse)
-async def adapt_learning_path(
+@router.post(
+    "/{learning_path_id}/adapt",
+    response_model=LearningPathJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def adapt_learning_path(
     learning_path_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     space: LearningSpace = Depends(get_learning_space),
-    settings: Settings = Depends(get_settings),
 ):
-    learning_path = db.scalar(
-        select(LearningPath).where(
-            LearningPath.id == learning_path_id,
-            LearningPath.user_id == user.id,
-            LearningPath.space_id == space.id,
-        )
+    return enqueue_learning_path_adaptation(
+        learning_path_id,
+        idempotency_key=idempotency_key,
+        db=db,
+        user=user,
+        space=space,
     )
-    if learning_path is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learning path not found")
-
-    profile = recent_profile(db, user.id, space.id, learning_path.daily_progress)
-    profile["completed_days"] = [
-        int(day)
-        for day, details in (learning_path.daily_progress or {}).items()
-        if isinstance(details, dict) and details.get("completed")
-    ]
-    provider = build_provider(settings)
-    try:
-        raw_plan = await provider.generate_learning_path(
-            {
-                "goal": learning_path.goal,
-                "current_level": learning_path.current_level,
-                "minutes_per_day": learning_path.minutes_per_day,
-            },
-            profile,
-        )
-        plan = LearningPathResult.model_validate(raw_plan).model_dump()
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider failed") from exc
-    learning_path.plan = plan
-    db.commit()
-    db.refresh(learning_path)
-    return _path_response(learning_path)
 
 
 @router.delete("/{learning_path_id}", response_model=MessageResponse)

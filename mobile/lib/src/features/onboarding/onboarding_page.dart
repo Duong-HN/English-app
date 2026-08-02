@@ -28,6 +28,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   int _questionIndex = 0;
   bool _loading = true;
   bool _saving = false;
+  String _completionStatus = 'idle';
   String? _error;
 
   String get _status => _onboarding?['status']?.toString() ?? 'needs_goal';
@@ -221,17 +222,31 @@ class _OnboardingPageState extends State<OnboardingPage> {
     setState(() {
       _saving = true;
       _error = null;
+      _completionStatus = 'processing';
     });
     try {
-      final response = await widget.apiClient.completeOnboarding();
+      final response = await widget.apiClient.completeOnboarding(
+        onStatus: (status) {
+          if (mounted) setState(() => _completionStatus = status);
+        },
+      );
       if (!mounted) return;
       _applyOnboarding(response);
+      setState(() => _completionStatus = 'succeeded');
       widget.onCompleted();
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _completionStatus = 'failed';
+          _error = exception.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Chưa thể tạo lộ trình. Hãy thử lại.');
+        setState(() {
+          _completionStatus = 'failed';
+          _error = 'Chưa thể tạo lộ trình. Hãy thử lại.';
+        });
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -342,6 +357,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           key: const ValueKey('result-step'),
           result: _placementResult ?? const {},
           saving: _saving,
+          status: _completionStatus,
           error: error,
           onGenerate: _complete,
         );
@@ -730,12 +746,14 @@ class _ResultStep extends StatelessWidget {
     super.key,
     required this.result,
     required this.saving,
+    required this.status,
     required this.error,
     required this.onGenerate,
   });
 
   final Map<String, dynamic> result;
   final bool saving;
+  final String status;
   final String? error;
   final VoidCallback onGenerate;
 
@@ -787,6 +805,13 @@ class _ResultStep extends StatelessWidget {
                   .toList(),
             ),
           ],
+          if (status != 'idle') ...[
+            const SizedBox(height: 16),
+            _OnboardingJobStatusCard(
+              status: status,
+              onRetry: status == 'failed' && !saving ? onGenerate : null,
+            ),
+          ],
           const SizedBox(height: 20),
           FilledButton.icon(
             key: const Key('generate-onboarding-path'),
@@ -807,6 +832,56 @@ class _ResultStep extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OnboardingJobStatusCard extends StatelessWidget {
+  const _OnboardingJobStatusCard({required this.status, this.onRetry});
+
+  final String status;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'succeeded' => 'Thành công',
+      'failed' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final icon = switch (status) {
+      'succeeded' => Icons.check_circle,
+      'failed' => Icons.error_outline,
+      _ => Icons.hourglass_top,
+    };
+    final color = switch (status) {
+      'succeeded' => Colors.green,
+      'failed' => Colors.red,
+      _ => Colors.orange,
+    };
+    return Semantics(
+      liveRegion: true,
+      label: 'Trạng thái tạo lộ trình: $label',
+      child: Card(
+        key: const Key('onboarding-job-status'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (onRetry != null)
+                TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+            ],
+          ),
+        ),
       ),
     );
   }
