@@ -1,6 +1,7 @@
 import asyncio
 
 from fastapi.testclient import TestClient
+from job_helpers import complete_legacy_learning_path
 from sqlalchemy import select
 
 from app.db import SessionLocal
@@ -22,13 +23,11 @@ def auth_header(token: str) -> dict[str, str]:
 
 
 def generate_path(client: TestClient, token: str) -> dict:
-    response = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=auth_header(token),
-        json={"goal": "Improve English for work", "current_level": "A1", "minutes_per_day": 30},
+    return complete_legacy_learning_path(
+        client,
+        token,
+        {"goal": "Improve English for work", "current_level": "A1", "minutes_per_day": 30},
     )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 def allow_path_regeneration(db_session, user_id: str) -> None:

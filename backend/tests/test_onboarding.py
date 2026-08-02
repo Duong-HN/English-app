@@ -1,6 +1,7 @@
 import asyncio
 
 from fastapi.testclient import TestClient
+from job_helpers import complete_legacy_learning_path
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
@@ -165,16 +166,15 @@ def test_existing_learning_path_is_safely_backfilled_as_completed(client, db_ses
     assert profile is not None
     db_session.delete(profile)
     db_session.commit()
-    generated = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=headers,
-        json={
+    complete_legacy_learning_path(
+        client,
+        session["access_token"],
+        {
             "goal": "Prepare for an English job interview",
             "current_level": "B1",
             "minutes_per_day": 20,
         },
     )
-    assert generated.status_code == 201
 
     onboarding = client.get("/api/v1/onboarding", headers=headers)
     assert onboarding.status_code == 200

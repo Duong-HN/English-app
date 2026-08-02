@@ -72,21 +72,6 @@ export const API_PRESETS: ApiPreset[] = [
     method: "GET",
     path: "/api/v1/admin/analysis-jobs?limit=20&offset=0",
   },
-  {
-    name: "Tạo lộ trình 7 ngày",
-    description: "Tạo lộ trình từ mục tiêu và lịch sử học của JWT hiện tại.",
-    method: "POST",
-    path: "/api/v1/learning-paths/generate",
-    body: JSON.stringify(
-      {
-        goal: "Giao tiếp tự tin trong công việc",
-        current_level: "B1",
-        minutes_per_day: 30,
-      },
-      null,
-      2,
-    ),
-  },
 ];
 
 export function parseHeaderJson(value: string): Record<string, string> {

@@ -88,7 +88,7 @@ CEFR starting level, per-skill correct/total/percentage values and `test_version
 - `POST /learning-path-jobs/{learning_path_id}/adapt` — enqueue adaptation of an existing path from recent results and completed days.
 - `GET /learning-path-jobs/{job_id}` — read an owned generation job and its resulting `learning_path_id`.
 - `GET /learning-paths/{id}` — read an owned learning path by id after a generation job succeeds.
-- `POST /learning-paths/generate` — legacy synchronous endpoint retained temporarily for compatibility; new clients must use `learning-path-jobs`.
+- `POST /learning-paths/generate` — legacy URL retained as an asynchronous compatibility alias; it returns `202` with a `generate` job. New clients should use `learning-path-jobs`.
 - `GET /learning-paths/current` — latest path owned by the authenticated learner.
 - `GET /learning-paths?limit=20&offset=0` — learner-owned path history.
 - `PATCH /learning-paths/{id}/days/{day}` — mark a daily task complete/incomplete and optionally save a note.

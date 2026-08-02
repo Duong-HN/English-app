@@ -25,7 +25,7 @@ def test_postman_collection_is_valid_and_covers_core_routes():
         "POST {{baseUrl}}/api/v1/auth/register",
         "POST {{baseUrl}}/api/v1/auth/login",
         "POST {{baseUrl}}/api/v1/analyses/writing",
-        "POST {{baseUrl}}/api/v1/learning-paths/generate",
+        "POST {{baseUrl}}/api/v1/learning-path-jobs",
         "GET {{baseUrl}}/api/v1/learning-paths/current",
         "GET {{baseUrl}}/api/v1/admin/stats",
         "GET {{baseUrl}}/api/v1/admin/learning-paths?limit=20&offset=0",

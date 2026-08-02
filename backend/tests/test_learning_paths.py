@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from job_helpers import complete_legacy_learning_path
 from sqlalchemy import func, select
 
 from app.models import LearnerProfile, User, utc_now
@@ -57,17 +58,15 @@ def test_generate_current_history_and_delete_personalized_path(client, db_sessio
         json={"input_text": "I want improve English because it help my future work."},
     )
 
-    generated = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=headers,
-        json={
+    payload = complete_legacy_learning_path(
+        client,
+        learner["access_token"],
+        {
             "goal": "Communicate confidently at work",
             "current_level": "B1",
             "minutes_per_day": 30,
         },
     )
-    assert generated.status_code == 201, generated.text
-    payload = generated.json()
     assert payload["provider"] == "mock"
     assert payload["current_level"] == "B1"
     assert payload["minutes_per_day"] == 30
@@ -96,12 +95,11 @@ def test_learning_paths_are_isolated_and_administrator_can_moderate(client, db_s
     promote(db_session, "path-admin@example.com")
     allow_path_regeneration(db_session, owner["user"]["id"])
 
-    generated = client.post(
-        "/api/v1/learning-paths/generate",
-        headers=auth_header(owner["access_token"]),
-        json={"goal": "Prepare for an English interview", "current_level": "A2", "minutes_per_day": 20},
+    generated = complete_legacy_learning_path(
+        client,
+        owner["access_token"],
+        {"goal": "Prepare for an English interview", "current_level": "A2", "minutes_per_day": 20},
     )
-    assert generated.status_code == 201
     assert (
         client.get(
             "/api/v1/learning-paths/current",
@@ -113,10 +111,10 @@ def test_learning_paths_are_isolated_and_administrator_can_moderate(client, db_s
     admin_headers = auth_header(admin["access_token"])
     listed = client.get("/api/v1/admin/learning-paths?q=interview", headers=admin_headers)
     assert listed.status_code == 200
-    assert any(item["id"] == generated.json()["id"] for item in listed.json()["items"])
+    assert any(item["id"] == generated["id"] for item in listed.json()["items"])
 
     deleted = client.delete(
-        f"/api/v1/admin/learning-paths/{generated.json()['id']}",
+        f"/api/v1/admin/learning-paths/{generated['id']}",
         headers=admin_headers,
     )
     logs = client.get("/api/v1/admin/audit-logs", headers=admin_headers)
