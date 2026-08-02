@@ -155,11 +155,11 @@ Luồng dữ liệu chung:
 
 ```text
 Text đã xác nhận
-  → POST /api/v1/analyses/{reading|writing|speaking}
-  → Backend chọn Mock hoặc Gemini provider
-  → validate JSON kết quả
-  → lưu analysis theo user + learning space
-  → Mobile hiển thị score tham khảo, summary, lỗi ngữ pháp và từ vựng
+  → POST /api/v1/analysis-jobs/{reading|writing|speaking}
+  → Backend validate context và xếp analysis job
+  → Worker chọn Mock hoặc Gemini provider
+  → validate JSON kết quả và lưu analysis theo user + learning space
+  → Mobile polling job, sau đó hiển thị score tham khảo, summary, lỗi ngữ pháp và từ vựng
 ```
 
 Nguyên tắc:

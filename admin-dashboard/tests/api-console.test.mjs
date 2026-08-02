@@ -31,12 +31,12 @@ test("parses custom headers and rejects non-object values", () => {
 test("creates a reproducible curl command without copying the live JWT", () => {
   const command = buildCurl("https://api.example.com", {
     method: "POST",
-    path: "/api/v1/analyses/writing",
+    path: "/api/v1/analysis-jobs/writing",
     headers: { Authorization: "private-token", "X-Trace": "demo" },
     body: '{"input_text":"Hello world"}',
   });
 
-  assert.match(command, /https:\/\/api\.example\.com\/api\/v1\/analyses\/writing/);
+  assert.match(command, /https:\/\/api\.example\.com\/api\/v1\/analysis-jobs\/writing/);
   assert.match(command, /Authorization: Bearer \$ADMIN_TOKEN/);
   assert.match(command, /Content-Type: application\/json/);
   assert.match(command, /X-Trace: demo/);

@@ -156,7 +156,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/reading"
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/reading"
           }
         },
         {
@@ -178,7 +178,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/writing"
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/writing"
           }
         },
         {
@@ -200,7 +200,7 @@
                 }
               }
             },
-            "url": "{{baseUrl}}/api/v1/analyses/speaking",
+            "url": "{{baseUrl}}/api/v1/analysis-jobs/speaking",
             "description": "Evaluates transcript relevance, grammar and vocabulary; it does not claim to grade pronunciation."
           }
         },

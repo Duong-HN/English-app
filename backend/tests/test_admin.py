@@ -1,3 +1,4 @@
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
@@ -102,10 +103,11 @@ def test_admin_can_review_and_delete_analysis(client, db_session):
     learner = register(client, "analysis-owner@example.com")
     promote(db_session, "analysis-admin@example.com")
     admin_headers = auth_header(admin["access_token"])
-    created = client.post(
-        "/api/v1/analyses/writing",
-        headers=auth_header(learner["access_token"]),
-        json={"input_text": "I study English every day to improve my communication skills."},
+    created = complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "writing",
+        {"input_text": "I study English every day to improve my communication skills."},
     )
     assert created.status_code == 200
 

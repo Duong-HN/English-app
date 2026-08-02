@@ -1,3 +1,4 @@
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 from job_helpers import complete_legacy_learning_path
 from sqlalchemy import func, select
@@ -52,10 +53,11 @@ def test_generate_current_history_and_delete_personalized_path(client, db_sessio
     learner = register(client, "path-owner@example.com")
     allow_path_regeneration(db_session, learner["user"]["id"])
     headers = auth_header(learner["access_token"])
-    client.post(
-        "/api/v1/analyses/writing",
-        headers=headers,
-        json={"input_text": "I want improve English because it help my future work."},
+    complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "writing",
+        {"input_text": "I want improve English because it help my future work."},
     )
 
     payload = complete_legacy_learning_path(

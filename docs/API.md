@@ -10,9 +10,11 @@ Base path: `/api/v1`
 
 ## Learning analysis
 
-- `POST /analyses/reading`
-- `POST /analyses/writing`
-- `POST /analyses/speaking`
+- `POST /analysis-jobs/reading`
+- `POST /analysis-jobs/writing`
+- `POST /analysis-jobs/speaking`
+- `GET /analysis-jobs/{job_id}` — poll until `status` is `succeeded` or `failed`.
+- `POST /analyses/{reading|writing|speaking}` — legacy compatibility alias; it also returns `202` with an analysis job.
 - `GET /analyses?limit=20&offset=0`
 - `GET /analyses/{id}`
 - `DELETE /analyses/{id}`
@@ -36,6 +38,10 @@ Speaking input is currently a transcript. The API prompt explicitly excludes pro
 score requires a separately configured audio assessment provider and is not synthesized from transcript confidence.
 When `learning_path_id` and `task_day` are supplied, the analysis is attached to that task and marks the day
 complete after a successful analysis.
+
+All analysis creation endpoints are asynchronous. The HTTP request only validates the learning context and queues a
+job; the AI provider runs in the worker. Clients should poll the job and then fetch `GET /analyses/{id}` when
+`analysis_id` is available. `Idempotency-Key` can be sent to safely retry queue requests.
 
 ## Onboarding
 

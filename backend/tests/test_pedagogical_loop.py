@@ -1,5 +1,6 @@
 import asyncio
 
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 from job_helpers import complete_legacy_learning_path
 from sqlalchemy import select
@@ -95,10 +96,11 @@ def test_placement_test_sets_verified_level_for_future_paths(client, db_session)
 def test_reading_vocabulary_is_saved_and_can_be_reviewed(client):
     session = register(client, "vocabulary-loop@example.com")
     headers = auth_header(session["access_token"])
-    analysis = client.post(
-        "/api/v1/analyses/reading",
-        headers=headers,
-        json={"input_text": "The learner practices English every day."},
+    analysis = complete_legacy_analysis(
+        client,
+        session["access_token"],
+        "reading",
+        {"input_text": "The learner practices English every day."},
     )
     assert analysis.status_code == 200, analysis.text
 
@@ -130,10 +132,11 @@ def test_task_progress_and_analysis_context_close_the_feedback_loop(client, db_s
     assert completed.status_code == 200
     assert completed.json()["daily_progress"]["1"]["completed"] is True
 
-    analysis = client.post(
-        "/api/v1/analyses/writing",
-        headers=headers,
-        json={
+    analysis = complete_legacy_analysis(
+        client,
+        session["access_token"],
+        "writing",
+        {
             "input_text": "I practice English every day to communicate better at work.",
             "learning_path_id": path["id"],
             "task_day": 2,

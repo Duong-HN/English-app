@@ -1,5 +1,6 @@
 from io import BytesIO
 
+from analysis_job_helpers import complete_legacy_analysis
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -121,10 +122,11 @@ def test_lesson_context_is_sent_to_ai_and_persisted(client, db_session):
     learner = register(client, "media-context@example.com", "Media Context")
     lesson = first_lesson(client, learner, skill="reading")
 
-    response = client.post(
-        "/api/v1/analyses/reading",
-        headers=headers(learner),
-        json={
+    response = complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "reading",
+        {
             "input_text": "The learner submitted a short answer for this lesson.",
             "lesson_id": lesson["id"],
         },
