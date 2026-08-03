@@ -233,6 +233,9 @@ All administration endpoints require a JWT belonging to an active user whose rol
 - `GET /admin/analyses?q=&type=&user_id=&limit=&offset=` — cross-user analysis review.
 - `GET /admin/analyses/{id}` — complete analysis details.
 - `DELETE /admin/analyses/{id}` — moderated deletion.
+- `POST /admin/ai-evaluations` — create or update one human rubric review for an analysis.
+- `GET /admin/ai-evaluations?analysis_id=&limit=&offset=` — list human reviews.
+- `GET /admin/ai-evaluations/summary` — aggregate rubric scores and sample status.
 - `GET /admin/learning-paths?q=&user_id=&limit=&offset=` — cross-user learning-path review.
 - `DELETE /admin/learning-paths/{id}` — moderated learning-path deletion.
 - `GET /admin/audit-logs` — immutable administration activity history.

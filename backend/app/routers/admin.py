@@ -8,6 +8,7 @@ from ..db import get_db
 from ..dependencies import require_admin
 from ..models import (
     AdminAuditLog,
+    AiEvaluationReview,
     Analysis,
     AnalysisJob,
     Classroom,
@@ -32,6 +33,10 @@ from ..schemas import (
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdate,
+    AiEvaluationReviewCreate,
+    AiEvaluationReviewListResponse,
+    AiEvaluationReviewResponse,
+    AiEvaluationSummaryResponse,
     AnalysisJobStatus,
     AnalysisType,
     MessageResponse,
@@ -90,6 +95,24 @@ def _analysis_job_response(job: AnalysisJob, user: User) -> AdminAnalysisJobResp
         started_at=job.started_at,
         completed_at=job.completed_at,
         updated_at=job.updated_at,
+    )
+
+
+def _ai_evaluation_response(review: AiEvaluationReview, reviewer: User) -> AiEvaluationReviewResponse:
+    return AiEvaluationReviewResponse(
+        id=review.id,
+        analysis_id=review.analysis_id,
+        reviewer_id=review.reviewer_id,
+        reviewer_email=reviewer.email,
+        case_id=review.case_id,
+        correctness=review.correctness,
+        usefulness=review.usefulness,
+        level_fit=review.level_fit,
+        grounding=review.grounding,
+        hallucination=review.hallucination,
+        reviewer_note=review.reviewer_note,
+        created_at=review.created_at,
+        updated_at=review.updated_at,
     )
 
 
@@ -485,6 +508,111 @@ def list_analysis_jobs(
     return AdminAnalysisJobListResponse(
         items=[_analysis_job_response(job, user) for job, user in rows],
         total=total,
+    )
+
+
+@router.post("/ai-evaluations", response_model=AiEvaluationReviewResponse)
+def save_ai_evaluation(
+    review: AiEvaluationReviewCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    analysis = db.get(Analysis, review.analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    existing = db.scalar(
+        select(AiEvaluationReview).where(
+            AiEvaluationReview.analysis_id == analysis.id,
+            AiEvaluationReview.reviewer_id == admin.id,
+        )
+    )
+    if existing is None:
+        existing = AiEvaluationReview(
+            analysis_id=analysis.id,
+            reviewer_id=admin.id,
+            **review.model_dump(exclude={"analysis_id"}),
+        )
+        db.add(existing)
+        action = "ai_evaluation.created"
+    else:
+        for key, value in review.model_dump(exclude={"analysis_id"}).items():
+            setattr(existing, key, value)
+        existing.updated_at = utc_now()
+        action = "ai_evaluation.updated"
+    db.flush()
+    _record_audit(
+        db,
+        admin,
+        action=action,
+        target_type="ai_evaluation_review",
+        target_id=existing.id,
+        details={"analysis_id": analysis.id, "provider": analysis.provider},
+    )
+    db.commit()
+    db.refresh(existing)
+    return _ai_evaluation_response(existing, admin)
+
+
+@router.get("/ai-evaluations", response_model=AiEvaluationReviewListResponse)
+def list_ai_evaluations(
+    analysis_id: str | None = Query(default=None, max_length=64),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    filters = []
+    if analysis_id:
+        filters.append(AiEvaluationReview.analysis_id == analysis_id)
+    total = db.scalar(select(func.count()).select_from(AiEvaluationReview).where(*filters)) or 0
+    rows = db.execute(
+        select(AiEvaluationReview, User)
+        .join(User, User.id == AiEvaluationReview.reviewer_id)
+        .where(*filters)
+        .order_by(AiEvaluationReview.created_at.desc(), AiEvaluationReview.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return AiEvaluationReviewListResponse(
+        items=[_ai_evaluation_response(item, reviewer) for item, reviewer in rows],
+        total=total,
+    )
+
+
+@router.get("/ai-evaluations/summary", response_model=AiEvaluationSummaryResponse)
+def ai_evaluation_summary(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    row = db.execute(
+        select(
+            func.count(AiEvaluationReview.id),
+            func.avg(AiEvaluationReview.correctness),
+            func.avg(AiEvaluationReview.usefulness),
+            func.avg(AiEvaluationReview.level_fit),
+            func.avg(AiEvaluationReview.grounding),
+            func.avg(AiEvaluationReview.hallucination),
+        )
+    ).one()
+    review_count = int(row[0] or 0)
+    hallucination_count = (
+        db.scalar(
+            select(func.count()).select_from(AiEvaluationReview).where(AiEvaluationReview.hallucination >= 4)
+        )
+        or 0
+    )
+    return AiEvaluationSummaryResponse(
+        review_count=review_count,
+        minimum_required=30,
+        status=(
+            "pending" if review_count == 0 else "complete" if review_count >= 30 else "insufficient_sample"
+        ),
+        average_correctness=float(row[1]) if row[1] is not None else None,
+        average_usefulness=float(row[2]) if row[2] is not None else None,
+        average_level_fit=float(row[3]) if row[3] is not None else None,
+        average_grounding=float(row[4]) if row[4] is not None else None,
+        average_hallucination=float(row[5]) if row[5] is not None else None,
+        hallucination_rate=hallucination_count / review_count if review_count else None,
     )
 
 

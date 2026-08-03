@@ -118,6 +118,28 @@ class Analysis(Base):
     learning_path: Mapped[LearningPath | None] = relationship(back_populates="analyses")
 
 
+class AiEvaluationReview(Base):
+    """Human rubric review of one persisted AI result."""
+
+    __tablename__ = "ai_evaluation_reviews"
+    __table_args__ = (
+        UniqueConstraint("analysis_id", "reviewer_id", name="uq_ai_evaluation_review_reviewer"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    analysis_id: Mapped[str] = mapped_column(ForeignKey("analyses.id", ondelete="CASCADE"), index=True)
+    reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    case_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    correctness: Mapped[int] = mapped_column()
+    usefulness: Mapped[int] = mapped_column()
+    level_fit: Mapped[int] = mapped_column()
+    grounding: Mapped[int] = mapped_column()
+    hallucination: Mapped[int] = mapped_column()
+    reviewer_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AnalysisJob(Base):
     """Durable boundary between an HTTP request and an AI execution worker.
 

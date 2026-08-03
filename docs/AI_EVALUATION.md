@@ -40,6 +40,16 @@ Review JSONL cần có các trường:
     grounding
     hallucination
 
+Prototype API workflow:
+
+- `POST /api/v1/admin/ai-evaluations` stores one review linked to a persisted `analysis_id`.
+- The same administrator can update their review without creating a duplicate row.
+- `GET /api/v1/admin/ai-evaluations/summary` reports averages, hallucination rate and whether the sample is
+  `pending`, `insufficient_sample` or `complete`.
+
+The API does not create synthetic reviews and does not promote an AI result to ground truth. A review is evidence from
+one human reviewer, not a replacement for a larger inter-rater reliability study.
+
 Công cụ tổng hợp:
 
     cd backend
@@ -73,4 +83,3 @@ Chỉ trạng thái complete khi có tối thiểu 30 review hợp lệ. Không 
 - Speaking hiện chỉ đánh giá transcript về relevance, grammar và vocabulary.
 - Không dùng kết quả AI để tuyên bố điểm IELTS hoặc điểm phát âm chính thức.
 - Nếu không có reviewer thật, báo cáo phải ghi rõ AI evaluation đang ở trạng thái chưa hoàn tất.
-

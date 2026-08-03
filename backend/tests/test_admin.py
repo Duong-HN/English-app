@@ -124,6 +124,48 @@ def test_admin_can_review_and_delete_analysis(client, db_session):
     assert any(item["action"] == "analysis.deleted" for item in logs.json()["items"])
 
 
+def test_admin_can_record_human_ai_evaluation(client, db_session):
+    admin = register(client, "ai-review-admin@example.com")
+    learner = register(client, "ai-review-learner@example.com")
+    promote(db_session, "ai-review-admin@example.com")
+    created = complete_legacy_analysis(
+        client,
+        learner["access_token"],
+        "writing",
+        {"input_text": "I practice English every day at work."},
+    )
+    admin_headers = auth_header(admin["access_token"])
+
+    saved = client.post(
+        "/api/v1/admin/ai-evaluations",
+        headers=admin_headers,
+        json={
+            "analysis_id": created.json()["id"],
+            "case_id": "writing-01",
+            "correctness": 4,
+            "usefulness": 5,
+            "level_fit": 4,
+            "grounding": 5,
+            "hallucination": 1,
+            "reviewer_note": "Feedback is grounded and actionable.",
+        },
+    )
+    listed = client.get(
+        f"/api/v1/admin/ai-evaluations?analysis_id={created.json()['id']}",
+        headers=admin_headers,
+    )
+    summary = client.get("/api/v1/admin/ai-evaluations/summary", headers=admin_headers)
+
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["reviewer_email"] == "ai-review-admin@example.com"
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+    assert summary.status_code == 200
+    assert summary.json()["review_count"] == 1
+    assert summary.json()["status"] == "insufficient_sample"
+    assert summary.json()["hallucination_rate"] == 0
+
+
 def test_admin_can_monitor_and_retry_failed_analysis_job(client, db_session):
     admin = register(client, "job-admin@example.com")
     learner = register(client, "job-owner@example.com")

@@ -177,6 +177,34 @@ export type AdminAnalysisJob = {
   updated_at: string | null;
 };
 
+export type AiEvaluationReview = {
+  id: string;
+  analysis_id: string;
+  reviewer_id: string;
+  reviewer_email: string;
+  case_id: string | null;
+  correctness: number;
+  usefulness: number;
+  level_fit: number;
+  grounding: number;
+  hallucination: number;
+  reviewer_note: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type AiEvaluationSummary = {
+  review_count: number;
+  minimum_required: number;
+  status: "pending" | "insufficient_sample" | "complete";
+  average_correctness: number | null;
+  average_usefulness: number | null;
+  average_level_fit: number | null;
+  average_grounding: number | null;
+  average_hallucination: number | null;
+  hallucination_rate: number | null;
+};
+
 export type LearningPathTask = {
   day: number;
   title: string;
@@ -644,6 +672,32 @@ export class AdminApi {
     return this.request<AdminAnalysisJob>(
       `/api/v1/admin/analysis-jobs/${encodeURIComponent(jobId)}/retry`,
       { method: "POST", body: JSON.stringify({}) },
+    );
+  }
+
+  aiEvaluationSummary() {
+    return this.request<AiEvaluationSummary>("/api/v1/admin/ai-evaluations/summary");
+  }
+
+  aiEvaluations(analysisId?: string) {
+    return this.request<{ items: AiEvaluationReview[]; total: number }>(
+      `/api/v1/admin/ai-evaluations${queryString({ analysis_id: analysisId, limit: 25, offset: 0 })}`,
+    );
+  }
+
+  saveAiEvaluation(input: {
+    analysis_id: string;
+    case_id?: string;
+    correctness: number;
+    usefulness: number;
+    level_fit: number;
+    grounding: number;
+    hallucination: number;
+    reviewer_note?: string;
+  }) {
+    return this.request<AiEvaluationReview>(
+      "/api/v1/admin/ai-evaluations",
+      { method: "POST", body: JSON.stringify(input) },
     );
   }
 

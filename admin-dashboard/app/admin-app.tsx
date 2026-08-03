@@ -8,6 +8,7 @@ import {
   AdminLearningPath,
   AdminStats,
   AdminUser,
+  AiEvaluationSummary,
   AssignmentSubmission,
   ApiError,
   AuditLog,
@@ -23,7 +24,7 @@ import {
 import { ApiConsole } from "./api-console";
 
 type Session = { token: string; user: SessionUser; baseUrl: string };
-type View = "overview" | "users" | "teacher-applications" | "analyses" | "analysis-jobs" | "paths" | "content" | "audit" | "console";
+type View = "overview" | "users" | "teacher-applications" | "analyses" | "ai-evaluations" | "analysis-jobs" | "paths" | "content" | "audit" | "console";
 
 const TOKEN_KEY = "learnmate_admin_token";
 const API_KEY = "learnmate_admin_api";
@@ -31,6 +32,7 @@ const PAGE_SIZE = 20;
 
 const navItems: Array<{ id: View; label: string; short: string }> = [
   { id: "analysis-jobs", label: "AI jobs", short: "05" },
+  { id: "ai-evaluations", label: "AI review", short: "09" },
   { id: "overview", label: "Tổng quan", short: "01" },
   { id: "users", label: "Người dùng", short: "02" },
   { id: "teacher-applications", label: "Hồ sơ giáo viên", short: "03" },
@@ -671,6 +673,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           {view === "users" && <UsersPage api={api} currentUser={session.user} />}
           {view === "teacher-applications" && <TeacherApplicationsPage api={api} />}
           {view === "analyses" && <AnalysesPage api={api} />}
+          {view === "ai-evaluations" && <AiEvaluationsPage api={api} />}
           {view === "analysis-jobs" && <AnalysisJobsPage api={api} />}
           {view === "paths" && <LearningPathsPage api={api} />}
           {view === "content" && <ContentPage api={api} />}
@@ -1211,6 +1214,113 @@ function AnalysesPage({ api }: { api: AdminApi }) {
         </section>
       )}
       {selected && <AnalysisDialog item={selected} onClose={() => setSelected(null)} onDelete={() => void remove(selected)} />}
+    </div>
+  );
+}
+
+type ReviewScoreKey = "correctness" | "usefulness" | "level_fit" | "grounding" | "hallucination";
+
+const reviewScoreLabels: Array<[ReviewScoreKey, string]> = [
+  ["correctness", "Correctness"],
+  ["usefulness", "Usefulness"],
+  ["level_fit", "Level fit"],
+  ["grounding", "Grounding"],
+  ["hallucination", "Hallucination (5 = bad)"],
+];
+
+function AiEvaluationsPage({ api }: { api: AdminApi }) {
+  const [analyses, setAnalyses] = useState<AdminAnalysis[]>([]);
+  const [summary, setSummary] = useState<AiEvaluationSummary | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scores, setScores] = useState<Record<ReviewScoreKey, number>>({
+    correctness: 3,
+    usefulness: 3,
+    level_fit: 3,
+    grounding: 3,
+    hallucination: 1,
+  });
+  const [caseId, setCaseId] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.analyses({ limit: PAGE_SIZE, offset: 0 }),
+      api.aiEvaluationSummary(),
+    ])
+      .then(([analysisPage, evaluationSummary]) => {
+        if (!active) return;
+        setAnalyses(analysisPage.items);
+        setSelectedId(analysisPage.items[0]?.id ?? null);
+        setSummary(evaluationSummary);
+      })
+      .catch((reason) => active && setError(readableError(reason)))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [api]);
+
+  const selected = analyses.find((item) => item.id === selectedId) ?? null;
+  const summaryLabel = summary?.status === "complete"
+    ? "Đủ mẫu tối thiểu"
+    : summary?.status === "insufficient_sample"
+      ? "Chưa đủ mẫu"
+      : "Chưa có review";
+
+  function chooseAnalysis(analysis: AdminAnalysis) {
+    setSelectedId(analysis.id);
+    setScores({ correctness: 3, usefulness: 3, level_fit: 3, grounding: 3, hallucination: 1 });
+    setCaseId("");
+    setNote("");
+    setNotice(null);
+  }
+
+  async function saveReview() {
+    if (!selected) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.saveAiEvaluation({
+        analysis_id: selected.id,
+        case_id: caseId.trim() || undefined,
+        ...scores,
+        reviewer_note: note.trim() || undefined,
+      });
+      setSummary(await api.aiEvaluationSummary());
+      setNotice("Đã lưu review của con người. Không tự động coi đây là ground truth.");
+    } catch (reason) {
+      setError(readableError(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="page-stack">
+      <section className="section-heading"><div><p className="eyebrow blue">Human evaluation</p><h2>Đánh giá chất lượng AI</h2><p className="muted">Chấm bằng rubric thật; JSON hợp lệ không đồng nghĩa feedback đúng.</p></div><span className="count-badge">{summary?.review_count ?? 0}/{summary?.minimum_required ?? 30} review</span></section>
+      {summary && <div className="metric-grid"><article className="metric-card"><span>Trạng thái mẫu</span><strong>{summaryLabel}</strong></article><article className="metric-card"><span>Correctness</span><strong>{summary.average_correctness?.toFixed(2) ?? "—"}</strong></article><article className="metric-card"><span>Hallucination rate</span><strong>{summary.hallucination_rate == null ? "—" : `${(summary.hallucination_rate * 100).toFixed(1)}%`}</strong></article></div>}
+      {error && <div className="inline-alert error-alert" role="alert">{error}</div>}
+      {notice && <div className="inline-alert success-alert">{notice}</div>}
+      {loading ? <LoadingState label="Đang tải dữ liệu đánh giá…" /> : (
+        <div className="two-column-layout">
+          <section className="panel">
+            <div className="panel-heading"><div><p className="eyebrow">Samples</p><h3>Chọn analysis</h3></div><span className="count-badge">{analyses.length}</span></div>
+            {analyses.length === 0 ? <EmptyState message="Chưa có analysis để review." /> : analyses.map((analysis) => <button type="button" key={analysis.id} className={`list-button ${selectedId === analysis.id ? "active" : ""}`} onClick={() => chooseAnalysis(analysis)}><strong>{analysis.type} · {analysis.user_display_name}</strong><small>{analysis.input_text}</small></button>)}
+          </section>
+          {selected ? <section className="panel">
+            <div className="panel-heading"><div><p className="eyebrow">Reviewer rubric</p><h3>{selected.type} · {selected.user_email}</h3></div><span className="provider-badge">{selected.provider}</span></div>
+            <div className="detail-section"><h4>Input</h4><p>{selected.input_text}</p><h4>AI output</h4><pre>{JSON.stringify(selected.result, null, 2)}</pre></div>
+            <label className="field"><span>Case ID</span><input value={caseId} onChange={(event) => setCaseId(event.target.value)} placeholder="writing-01" /></label>
+            {reviewScoreLabels.map(([key, label]) => <label className="field" key={key}><span>{label}: {scores[key]}</span><input type="range" min="1" max="5" value={scores[key]} onChange={(event) => setScores((current) => ({ ...current, [key]: Number(event.target.value) }))} /></label>)}
+            <label className="field"><span>Reviewer note</span><textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi rõ bằng chứng và failure case…" /></label>
+            <button className="primary-button" type="button" disabled={busy} onClick={() => void saveReview()}>{busy ? "Đang lưu…" : "Lưu human review"}</button>
+          </section> : <EmptyState message="Chọn một analysis để bắt đầu review." />}
+        </div>
+      )}
     </div>
   );
 }

@@ -148,6 +148,60 @@ class AnalysisResponse(BaseModel):
     created_at: datetime
 
 
+class AiEvaluationReviewCreate(BaseModel):
+    analysis_id: str = Field(min_length=1, max_length=64)
+    case_id: str | None = Field(default=None, max_length=128)
+    correctness: int = Field(ge=1, le=5)
+    usefulness: int = Field(ge=1, le=5)
+    level_fit: int = Field(ge=1, le=5)
+    grounding: int = Field(ge=1, le=5)
+    hallucination: int = Field(ge=1, le=5)
+    reviewer_note: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("case_id", "reviewer_note")
+    @classmethod
+    def clean_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        return cleaned or None
+
+
+class AiEvaluationReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    analysis_id: str
+    reviewer_id: str
+    reviewer_email: EmailStr
+    case_id: str | None
+    correctness: int
+    usefulness: int
+    level_fit: int
+    grounding: int
+    hallucination: int
+    reviewer_note: str | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class AiEvaluationReviewListResponse(BaseModel):
+    items: list[AiEvaluationReviewResponse]
+    total: int
+
+
+class AiEvaluationSummaryResponse(BaseModel):
+    review_count: int
+    minimum_required: int
+    status: Literal["pending", "insufficient_sample", "complete"]
+    average_correctness: float | None
+    average_usefulness: float | None
+    average_level_fit: float | None
+    average_grounding: float | None
+    average_hallucination: float | None
+    hallucination_rate: float | None
+
+
 class AnalysisJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
