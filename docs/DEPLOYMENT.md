@@ -50,6 +50,9 @@ Configure a GitHub `production` environment and the optional secret:
 ```text
 BACKEND_DEPLOY_HOOK_URL
 ADMIN_DEPLOY_HOOK_URL
+BACKEND_MIGRATION_HOOK_URL
+BACKEND_HEALTHCHECK_URL
+ADMIN_HEALTHCHECK_URL
 ```
 
 Publishing a GitHub Release invokes these hooks. Point them to managed container platform deployment hooks. The backend platform must run the published image with:
@@ -75,9 +78,9 @@ RATE_LIMIT_BACKEND=redis
 REDIS_URL=<private Redis URL>
 ```
 
-The prototype container runs `alembic upgrade head` before Uvicorn and exposes `/health/ready` for health checks. This
-startup-migration pattern is suitable only for a controlled single-instance demonstration. Production deployments should
-run migrations as a separate, reviewed job before application rollout.
+The API image starts Uvicorn only. Local Compose runs a one-shot `migrate` service before the API. Production must run
+`BACKEND_MIGRATION_HOOK_URL` as a separate, reviewed migration job before the backend rollout, then verify both backend
+and admin health URLs. Running migrations from every API replica is not acceptable.
 
 Run the admin image with:
 

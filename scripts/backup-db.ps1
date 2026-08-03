@@ -1,8 +1,8 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$OutputDirectory = "$(Get-Location)\backups"
 )
+
+$ErrorActionPreference = "Stop"
 
 if (-not $env:DATABASE_URL) {
     throw "DATABASE_URL is required"

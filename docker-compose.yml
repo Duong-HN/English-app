@@ -41,8 +41,8 @@ services:
       MEDIA_MAX_SIZE_MB: "100"
       ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -50,6 +50,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  migrate:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://learnmate:local-development-password@db:5432/learnmate
+      AUTO_CREATE_SCHEMA: "false"
+      JWT_SECRET: local-docker-secret-change-before-production
+      ENABLE_DEV_AUTH: "false"
+      AI_PROVIDER: mock
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "alembic", "upgrade", "head"]
 
   worker:
     build:

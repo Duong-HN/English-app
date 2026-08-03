@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .config import get_settings
 from .db import Base, engine
+from .observability import log_request, metrics, monotonic_seconds, request_id, route_template
 from .rate_limit import RedisRateLimiter, RequestRateLimiter
 from .routers import (
     admin,
@@ -84,6 +85,24 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @application.middleware("http")
+    async def request_observability(request: Request, call_next) -> Response:
+        correlation_id = request_id(request)
+        started = monotonic_seconds()
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration = monotonic_seconds() - started
+            metrics.observe_request(request.method, route_template(request), 500, duration)
+            log_request(request, correlation_id, 500, duration)
+            raise
+        duration = monotonic_seconds() - started
+        route = route_template(request)
+        metrics.observe_request(request.method, route, response.status_code, duration)
+        log_request(request, correlation_id, response.status_code, duration)
+        response.headers["X-Request-ID"] = correlation_id
         return response
 
     application.include_router(health.router)

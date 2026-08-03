@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory = $true)]
     [string]$BackupFile,
     [string]$BackendDirectory = "$(Get-Location)\backend"
 )
+
+$ErrorActionPreference = "Stop"
 
 if (-not $env:RESTORE_DATABASE_URL) {
     throw "RESTORE_DATABASE_URL is required and must point to an isolated restore target"
