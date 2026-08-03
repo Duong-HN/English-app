@@ -82,6 +82,11 @@ export function AdminApp({ defaultApiBaseUrl }: { defaultApiBaseUrl: string }) {
   const [restoring, setRestoring] = useState(true);
 
   useEffect(() => {
+    // Access JWTs are intentionally memory-only. Remove tokens persisted by old builds.
+    sessionStorage.removeItem(TOKEN_KEY);
+    const timeout = window.setTimeout(() => setRestoring(false), 0);
+    return () => window.clearTimeout(timeout);
+    /*
     const token = sessionStorage.getItem(TOKEN_KEY);
     const savedApi = sessionStorage.getItem(API_KEY) ?? defaultApiBaseUrl;
     const restoreSession = token
@@ -100,15 +105,18 @@ export function AdminApp({ defaultApiBaseUrl }: { defaultApiBaseUrl: string }) {
         sessionStorage.removeItem(TOKEN_KEY);
       })
       .finally(() => setRestoring(false));
+    */
   }, [defaultApiBaseUrl]);
 
   function acceptSession(next: Session) {
-    sessionStorage.setItem(TOKEN_KEY, next.token);
     sessionStorage.setItem(API_KEY, next.baseUrl);
     setSession(next);
   }
 
   function logout() {
+    if (session) {
+      void new AdminApi(session.baseUrl, session.token).logout().catch(() => undefined);
+    }
     sessionStorage.removeItem(TOKEN_KEY);
     setSession(null);
   }
@@ -138,6 +146,7 @@ function LoginScreen({
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [baseUrl, setBaseUrl] = useState(defaultApiBaseUrl);
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -150,7 +159,7 @@ function LoginScreen({
     try {
       const normalized = normalizeBaseUrl(baseUrl);
       const api = new AdminApi(normalized);
-      const response = await api.login(email.trim(), password);
+      const response = await api.login(email.trim(), password, mfaCode.trim() || undefined);
       if (response.user.role !== "admin" && response.user.role !== "teacher") {
         throw new Error("Tài khoản học viên không thể truy cập cổng quản lý.");
       }
@@ -224,6 +233,17 @@ function LoginScreen({
               autoComplete="current-password"
               minLength={8}
               required
+            />
+          </label>
+          <label className="field">
+            <span>MFA code (optional)</span>
+            <input
+              inputMode="numeric"
+              maxLength={6}
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ""))}
+              placeholder="123456"
+              autoComplete="one-time-code"
             />
           </label>
 

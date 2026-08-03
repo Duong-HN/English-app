@@ -172,9 +172,11 @@ they joined. Administrator access is explicit and does not turn teachers into ad
 ## Security boundaries
 
 - Passwords use Argon2 through `pwdlib`.
-- JWTs expire and contain only the user ID.
+- Access JWTs are short-lived credentials bound to a database-backed revocable session; refresh tokens are rotated and
+  stored only as hashes server-side.
 - Tokens are stored with Flutter secure storage.
-- Admin JWTs are tab-scoped in browser `sessionStorage`, not persistent local storage. This is a prototype trade-off, not the recommended production session architecture.
+- Admin access JWTs are memory-only in the browser; legacy tokens in `sessionStorage` are removed on startup.
+- Administrator MFA uses TOTP with its secret encrypted at rest using a separate `MFA_ENCRYPTION_KEY` in production.
 - Gemini keys remain server-side and are ignored by Git.
 - Development identity headers are disabled in production.
 - Administrator endpoints require an active server-validated `admin` role.
@@ -185,11 +187,12 @@ they joined. Administrator access is explicit and does not turn teachers into ad
 
 ## Known production boundaries
 
-- Add rate limiting through an API gateway or Redis-backed limiter before public launch.
+- Production rate limiting uses the Redis-backed atomic sliding-window limiter; a gateway-level limit is still recommended
+  as a second perimeter.
 - Add password reset/email verification before public registration.
 - Add observability and personal-data retention rules.
 - Validate pronunciation with a dedicated acoustic/phoneme pipeline, not an LLM transcript score.
 - Move AI analysis and assignment processing to an idempotent background job before public scale.
 - Replace local media volumes with object storage and CDN delivery before horizontal scaling.
-- Add PostgreSQL integration, migration rollout/rollback testing, backups and restore drills.
+- Add migration rollout/rollback testing, backups and restore drills.
 - Add human-reviewed AI quality evaluation; schema-valid JSON alone does not prove educational correctness.

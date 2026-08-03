@@ -33,6 +33,9 @@ def test_production_accepts_explicit_safe_configuration():
         gemini_api_key="configured-provider-key",
         allowed_origins="https://learnmate.example.com",
         media_public_base_url="https://media.learnmate.example.com",
+        rate_limit_backend="redis",
+        redis_url="redis://redis.internal:6379/0",
+        mfa_encryption_key="a-separate-mfa-encryption-key-with-32-chars",
     )
 
     assert settings.app_env == "production"

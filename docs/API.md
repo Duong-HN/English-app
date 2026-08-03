@@ -8,6 +8,16 @@ Base path: `/api/v1`
 - `POST /auth/login` — email and password; returns JWT and user.
 - `GET /auth/me` — current user; requires `Authorization: Bearer <token>`.
 
+## Session security (current contract)
+
+Registration and login return a short-lived access JWT plus a refresh token. The refresh token is rotated on every
+`POST /auth/refresh` call; the server stores only its hash. `POST /auth/logout` revokes the current server-side
+session, so all access JWTs bound to that session stop working. Clients must keep refresh tokens in secure storage and
+must not put either token in URLs or logs.
+
+Administrator MFA uses TOTP. Use `GET /auth/mfa/status`, `POST /auth/mfa/setup`, `POST /auth/mfa/enable` and
+`POST /auth/mfa/disable`. An enabled administrator must include a six-digit `mfa_code` in `/auth/login`.
+
 ## Learning analysis
 
 - `POST /analysis-jobs/reading`

@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     jwt_secret: str = "development-only-change-me"
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 1440
+    refresh_token_days: int = 30
     enable_dev_auth: bool = True
+    mfa_encryption_key: str | None = None
 
     ai_provider: str = "mock"
     gemini_api_key: str | None = None
@@ -26,6 +28,8 @@ class Settings(BaseSettings):
     media_public_base_url: str | None = None
     rate_limit_enabled: bool = True
     rate_limit_window_seconds: int = 60
+    rate_limit_backend: str = "memory"
+    redis_url: str | None = None
 
     allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
@@ -63,6 +67,14 @@ class Settings(BaseSettings):
                 raise ValueError("RATE_LIMIT_ENABLED must be true in production")
             if self.rate_limit_window_seconds < 1:
                 raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be positive")
+            if self.refresh_token_days < 1:
+                raise ValueError("REFRESH_TOKEN_DAYS must be positive")
+            if self.rate_limit_backend.lower() != "redis" or not self.redis_url:
+                raise ValueError("Production requires RATE_LIMIT_BACKEND=redis and REDIS_URL")
+            if not self.mfa_encryption_key or len(self.mfa_encryption_key) < 32:
+                raise ValueError(
+                    "MFA_ENCRYPTION_KEY must be a separate random value of at least 32 characters"
+                )
         return self
 
 

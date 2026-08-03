@@ -72,3 +72,54 @@ class RequestRateLimiter:
             return "token:" + hashlib.sha256(authorization.encode()).hexdigest()
         host = request.client.host if request.client else "unknown"
         return f"ip:{host}"
+
+
+class RedisRateLimiter:
+    """Atomic sliding-window limiter for deployments with multiple API replicas."""
+
+    _script = """
+    local now = tonumber(ARGV[1])
+    local cutoff = now - tonumber(ARGV[2])
+    local limit = tonumber(ARGV[3])
+    redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, cutoff)
+    local count = redis.call('ZCARD', KEYS[1])
+    if count >= limit then
+        redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+        return {0, tonumber(ARGV[2])}
+    end
+    redis.call('ZADD', KEYS[1], now, ARGV[4])
+    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+    return {1, 0}
+    """
+
+    def __init__(self, redis_url: str, window_seconds: int = 60):
+        try:
+            from redis import Redis
+        except ImportError as exc:
+            raise RuntimeError("redis package is required when RATE_LIMIT_BACKEND=redis") from exc
+        self.client = Redis.from_url(redis_url, decode_responses=True)
+        self.window_seconds = window_seconds
+
+    def check(self, request: RequestLike) -> tuple[bool, int]:
+        rule = next(
+            (
+                (limit, prefix)
+                for method, prefix, limit in RULES
+                if request.method == method and request.url.path.startswith(prefix)
+            ),
+            None,
+        )
+        if rule is None:
+            return True, 0
+        limit, prefix = rule
+        now = time.time()
+        identity = RequestRateLimiter._identity(request)
+        key = f"learnmate:rate:{prefix}:{identity}"
+        result = self.client.eval(
+            self._script, 1, key, now, self.window_seconds, limit, f"{now}:{secrets_token()}"
+        )
+        return bool(result[0]), int(result[1])
+
+
+def secrets_token() -> str:
+    return hashlib.sha256(f"{time.time_ns()}".encode()).hexdigest()

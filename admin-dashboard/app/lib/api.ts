@@ -448,14 +448,25 @@ export class AdminApi {
     };
   }
 
-  login(email: string, password: string) {
+  login(email: string, password: string, mfaCode?: string) {
     return this.request<{ access_token: string; user: SessionUser }>(
       "/api/v1/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(mfaCode ? { mfa_code: mfaCode } : {}),
+        }),
       },
     );
+  }
+
+  logout() {
+    return this.request<void>("/api/v1/auth/logout", {
+      method: "POST",
+      body: "{}",
+    });
   }
 
   me() {

@@ -41,6 +41,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    mfa_code: str | None = Field(default=None, pattern=r"^\d{6}$")
 
 
 class UserResponse(BaseModel):
@@ -108,8 +109,26 @@ class TeacherApplicationReview(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=256)
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaStatusResponse(BaseModel):
+    enabled: bool
 
 
 class AnalysisRequest(BaseModel):

@@ -59,10 +59,13 @@ APP_ENV=production
 DATABASE_URL=<managed PostgreSQL URL>
 AUTO_CREATE_SCHEMA=false
 JWT_SECRET=<32+ random characters>
+MFA_ENCRYPTION_KEY=<separate 32+ random characters>
 ENABLE_DEV_AUTH=false
 AI_PROVIDER=gemini
 GEMINI_API_KEY=<secret>
 ALLOWED_ORIGINS=<explicit HTTPS origins>
+RATE_LIMIT_BACKEND=redis
+REDIS_URL=<private Redis URL>
 ```
 
 The prototype container runs `alembic upgrade head` before Uvicorn and exposes `/health/ready` for health checks. This

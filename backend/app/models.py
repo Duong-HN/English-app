@@ -11,6 +11,11 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def is_expired(value: datetime) -> bool:
+    normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return normalized <= utc_now()
+
+
 def normalize_vocabulary_word(value: str) -> str:
     return " ".join(value.strip().split()).casefold()
 
@@ -28,6 +33,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     analyses: Mapped[list[Analysis]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -84,6 +91,28 @@ class User(Base):
         back_populates="admin_user",
         foreign_keys="AdminAuditLog.admin_user_id",
     )
+    auth_sessions: Mapped[list[AuthSession]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="auth_sessions")
 
 
 class Analysis(Base):

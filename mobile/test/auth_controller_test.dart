@@ -17,6 +17,7 @@ void main() {
         (_) async => http.Response(
           jsonEncode({
             'access_token': 'access-token',
+            'refresh_token': 'refresh-token',
             'user': {
               'id': 'user-1',
               'email': 'learner@example.com',
@@ -38,6 +39,7 @@ void main() {
     expect(success, isTrue);
     expect(controller.isAuthenticated, isTrue);
     expect(await store.read(), 'access-token');
+    expect(await store.readRefresh(), 'refresh-token');
     expect(controller.user?['email'], 'learner@example.com');
     controller.dispose();
   });

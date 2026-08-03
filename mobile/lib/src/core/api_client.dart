@@ -26,6 +26,7 @@ class ApiClient {
   final http.Client _client;
   final String baseUrl;
   String? accessToken;
+  String? refreshToken;
   String? learningSpaceId;
 
   static const _timeout = Duration(seconds: 30);
@@ -57,6 +58,36 @@ class ApiClient {
       body: {'email': email, 'password': password},
       authenticated: false,
     );
+  }
+
+  Future<Map<String, dynamic>> refreshSession() async {
+    final currentRefreshToken = refreshToken;
+    if (currentRefreshToken == null || currentRefreshToken.isEmpty) {
+      throw const ApiException('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.');
+    }
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/v1/auth/refresh'),
+          headers: _headers(authenticated: false),
+          body: jsonEncode({'refresh_token': currentRefreshToken}),
+        )
+        .timeout(_timeout);
+    final session = _decodeSuccess(response);
+    accessToken = session['access_token']?.toString();
+    refreshToken = session['refresh_token']?.toString();
+    return session;
+  }
+
+  Future<void> logoutSession() async {
+    if (accessToken == null) return;
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/v1/auth/logout'),
+          headers: _headers(),
+          body: '{}',
+        )
+        .timeout(_timeout);
+    _decodeSuccess(response);
   }
 
   Future<Map<String, dynamic>> profile() => _get('/api/v1/auth/me');
@@ -460,16 +491,18 @@ class ApiClient {
   }
 
   Future<void> deleteAnalysis(String id) async {
-    final response = await _client
-        .delete(Uri.parse('$baseUrl/api/v1/analyses/$id'), headers: _headers())
-        .timeout(_timeout);
+    final response = await _sendWithRefresh(
+      () => _client
+          .delete(Uri.parse('$baseUrl/api/v1/analyses/$id'), headers: _headers())
+          .timeout(_timeout),
+    );
     _decodeSuccess(response);
   }
 
   Future<Map<String, dynamic>> _get(String path) async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl$path'), headers: _headers())
-        .timeout(_timeout);
+    final response = await _sendWithRefresh(
+      () => _client.get(Uri.parse('$baseUrl$path'), headers: _headers()).timeout(_timeout),
+    );
     return _decodeSuccess(response);
   }
 
@@ -477,13 +510,15 @@ class ApiClient {
     String path, {
     required Map<String, dynamic> body,
   }) async {
-    final response = await _client
-        .patch(
-          Uri.parse('$baseUrl$path'),
-          headers: _headers(),
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout);
+    final response = await _sendWithRefresh(
+      () => _client
+          .patch(
+            Uri.parse('$baseUrl$path'),
+            headers: _headers(),
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
     return _decodeSuccess(response);
   }
 
@@ -493,17 +528,32 @@ class ApiClient {
     bool authenticated = true,
     Map<String, String>? extraHeaders,
   }) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl$path'),
-          headers: {
-            ..._headers(authenticated: authenticated),
-            ...?extraHeaders,
-          },
-          body: jsonEncode(body),
-        )
-        .timeout(_timeout);
+    final response = await _sendWithRefresh(
+      () => _client
+          .post(
+            Uri.parse('$baseUrl$path'),
+            headers: {
+              ..._headers(authenticated: authenticated),
+              ...?extraHeaders,
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+      allowRefresh: authenticated,
+    );
     return _decodeSuccess(response);
+  }
+
+  Future<http.Response> _sendWithRefresh(
+    Future<http.Response> Function() send, {
+    bool allowRefresh = true,
+  }) async {
+    final response = await send();
+    if (response.statusCode != 401 || !allowRefresh || refreshToken == null) {
+      return response;
+    }
+    await refreshSession();
+    return send();
   }
 
   Map<String, String> _headers({bool authenticated = true}) {

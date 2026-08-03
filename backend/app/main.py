@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .config import get_settings
 from .db import Base, engine
-from .rate_limit import RequestRateLimiter
+from .rate_limit import RedisRateLimiter, RequestRateLimiter
 from .routers import (
     admin,
     analyses,
@@ -59,7 +59,11 @@ def create_app() -> FastAPI:
         ],
         expose_headers=["Accept-Ranges", "Content-Length", "Content-Range"],
     )
-    limiter = RequestRateLimiter(settings.rate_limit_window_seconds)
+    limiter = (
+        RedisRateLimiter(settings.redis_url, settings.rate_limit_window_seconds)
+        if settings.rate_limit_backend.lower() == "redis" and settings.redis_url
+        else RequestRateLimiter(settings.rate_limit_window_seconds)
+    )
 
     @application.middleware("http")
     async def rate_limit(request: Request, call_next) -> Response:

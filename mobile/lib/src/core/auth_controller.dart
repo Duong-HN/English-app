@@ -45,16 +45,23 @@ class AuthController extends ChangeNotifier {
 
   Future<void> initialize() async {
     final token = await tokenStore.read();
+    final refreshToken = await tokenStore.readRefresh();
     if (token != null) {
       apiClient.accessToken = token;
+      apiClient.refreshToken = refreshToken;
       try {
         user = await apiClient.profile();
+        await tokenStore.write(
+          apiClient.accessToken!,
+          refreshToken: apiClient.refreshToken,
+        );
         activeLearningSpaceId = apiClient.learningSpaceId;
         if (!canUseTeacherMode) activeMode = learnerMode;
       } on ApiException catch (exception) {
         if (exception.statusCode == 401) {
           await tokenStore.clear();
           apiClient.accessToken = null;
+          apiClient.refreshToken = null;
         } else {
           error = exception.message;
         }
@@ -97,13 +104,14 @@ class AuthController extends ChangeNotifier {
       final session = await request();
       final token = session['access_token'] as String;
       apiClient.accessToken = token;
+      apiClient.refreshToken = session['refresh_token']?.toString();
       user = session['user'] as Map<String, dynamic>;
       activeMode = learnerMode;
       activeLearningSpaceId = null;
       activeLearningSpaceKind = 'self';
       activeLearningSpaceName = 'Tự học';
       apiClient.learningSpaceId = null;
-      await tokenStore.write(token);
+      await tokenStore.write(token, refreshToken: apiClient.refreshToken);
       return true;
     } on ApiException catch (exception) {
       error = exception.message;
@@ -118,8 +126,14 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    try {
+      await apiClient.logoutSession();
+    } catch (_) {
+      // Local logout must still complete when the backend is unreachable.
+    }
     user = null;
     apiClient.accessToken = null;
+    apiClient.refreshToken = null;
     activeMode = learnerMode;
     activeLearningSpaceId = null;
     activeLearningSpaceKind = 'self';
