@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import Analysis, AssignmentGradingJob, User, utc_now
+from app.models import Analysis, AssignmentGradingJob, AssignmentSubmission, User, utc_now
 from app.worker import process_assignment_grading_job
 
 
@@ -114,6 +114,40 @@ def test_assignment_submission_is_queued_and_idempotent(client, db_session):
     assert submission.status_code == 200
     assert submission.json()["status"] == "submitted"
     assert submission.json()["analysis"]["type"] == "writing"
+
+    with SessionLocal() as db:
+        job = db.get(AssignmentGradingJob, queued.json()["id"])
+        assert job is not None
+        job.status = "failed"
+        job.error_message = "Temporary provider failure"
+        job.completed_at = utc_now()
+        saved_submission = db.get(AssignmentSubmission, job.submission_id)
+        assert saved_submission is not None
+        saved_submission.status = "failed"
+        db.commit()
+    retry = client.post(
+        f"/api/v1/assignment-grading-jobs/{queued.json()['id']}/retry",
+        headers=auth_header(learner["access_token"]),
+    )
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["status"] == "queued"
+    assert retry.json()["attempt_count"] == 0
+
+    with SessionLocal() as db:
+        retried_job = db.get(AssignmentGradingJob, queued.json()["id"])
+        assert retried_job is not None
+        retried_job.status = "processing"
+        retried_job.attempt_count = 1
+        retried_job.started_at = utc_now()
+        db.commit()
+    asyncio.run(process_assignment_grading_job(queued.json()["id"]))
+    retried_completed = client.get(
+        f"/api/v1/assignment-grading-jobs/{queued.json()['id']}",
+        headers=auth_header(learner["access_token"]),
+    )
+    assert retried_completed.status_code == 200
+    assert retried_completed.json()["status"] == "succeeded"
+
     assert (
         db_session.scalar(
             select(func.count()).select_from(Analysis).where(Analysis.user_id == learner["user"]["id"])

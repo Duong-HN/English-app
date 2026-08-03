@@ -151,3 +151,41 @@ def get_assignment_grading_job(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment grading job not found")
     return job
+
+
+@router.post("/{job_id}/retry", response_model=AssignmentGradingJobResponse)
+def retry_assignment_grading_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    learner: User = Depends(require_learner),
+):
+    job = db.scalar(
+        select(AssignmentGradingJob).where(
+            AssignmentGradingJob.id == job_id,
+            AssignmentGradingJob.learner_id == learner.id,
+        )
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment grading job not found")
+    if job.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed assignment grading jobs can be retried",
+        )
+    submission = db.get(AssignmentSubmission, job.submission_id)
+    if submission is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Assignment submission is unavailable"
+        )
+    job.status = "queued"
+    job.attempt_count = 0
+    job.available_at = utc_now()
+    job.started_at = None
+    job.completed_at = None
+    job.error_message = None
+    job.updated_at = utc_now()
+    submission.status = "processing"
+    submission.updated_at = utc_now()
+    db.commit()
+    db.refresh(job)
+    return job
