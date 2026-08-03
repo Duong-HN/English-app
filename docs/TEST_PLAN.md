@@ -51,6 +51,8 @@ of educational quality.
 - Cross-user learning-path moderation and administrator audit logging.
 - Whitespace/input validation.
 - Alembic upgrade from an empty database.
+- PostgreSQL integration suite for readiness, AI jobs and assignment grading jobs.
+- Dependency-free HTTP load baseline with p50/p95/p99, throughput and error-rate output.
 - Production Docker image build.
 
 ## Automated administrator web checks
@@ -67,6 +69,7 @@ of educational quality.
 
 - GitHub Actions workflow validation with actionlint.
 - Docker Compose startup with PostgreSQL, API and admin web health checks.
+- Staging load test using [LOAD_TEST.md](LOAD_TEST.md); the baseline script is not evidence of 100,000-user capacity.
 - Browser integration: admin login, dashboard metrics, readiness/stats requests, learner registration and mock AI analysis through API Console.
 - Android release APK build with R8 enabled.
 
