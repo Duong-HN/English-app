@@ -20,8 +20,8 @@ jobs:
           DEPLOY_HOOK_URL: ${{ secrets.BACKEND_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "BACKEND_DEPLOY_HOOK_URL is not configured; deployment was intentionally skipped."
-            exit 0
+            echo "BACKEND_DEPLOY_HOOK_URL is required for a production deployment."
+            exit 1
           fi
           curl --fail-with-body --retry 3 --request POST "$DEPLOY_HOOK_URL"
       - name: Trigger administrator web deployment
@@ -29,7 +29,7 @@ jobs:
           DEPLOY_HOOK_URL: ${{ secrets.ADMIN_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "ADMIN_DEPLOY_HOOK_URL is not configured; deployment was intentionally skipped."
-            exit 0
+            echo "ADMIN_DEPLOY_HOOK_URL is required for a production deployment."
+            exit 1
           fi
           curl --fail-with-body --retry 3 --request POST "$DEPLOY_HOOK_URL"

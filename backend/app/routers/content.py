@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,7 +22,13 @@ from ..content_catalog import FOCUSED_COURSE_CODE, ensure_catalog
 from ..db import get_db
 from ..dependencies import get_current_user, require_admin
 from ..learning_spaces import get_learning_space
-from ..media_storage import delete_stored_media, resolve_storage_path, save_upload
+from ..media_storage import (
+    delete_stored_media,
+    is_object_storage,
+    presigned_media_url,
+    resolve_storage_path,
+    save_upload,
+)
 from ..models import (
     AdminAuditLog,
     Course,
@@ -101,6 +107,8 @@ def _course_response(
 def _media_url(media: LessonMedia, request: Request, settings: Settings) -> str:
     if media.source_url:
         return media.source_url
+    if is_object_storage(settings) and media.storage_key:
+        return presigned_media_url(settings, media.storage_key)
     if settings.media_public_base_url:
         return f"{settings.media_public_base_url.rstrip('/')}/api/v1/content/media/{media.id}/stream"
     return str(request.url_for("stream_lesson_media", media_id=media.id))
@@ -390,6 +398,18 @@ def stream_lesson_media(
     )
     if media is None or not media.storage_key:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    if is_object_storage(settings):
+        try:
+            target = presigned_media_url(settings, media.storage_key)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Media storage unavailable"
+            ) from exc
+        return RedirectResponse(
+            target,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Cache-Control": "private, max-age=300"},
+        )
     try:
         path = resolve_storage_path(settings, media.storage_key)
     except ValueError as exc:

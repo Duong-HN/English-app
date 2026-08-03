@@ -23,8 +23,8 @@ try {
 
     Push-Location backend
     try {
-        Invoke-Checked { & .\.venv\Scripts\python.exe -m ruff format --check app tests alembic mcp_server.py }
-        Invoke-Checked { & .\.venv\Scripts\python.exe -m ruff check app tests alembic mcp_server.py }
+        Invoke-Checked { & .\.venv\Scripts\python.exe -m ruff format --check app tests alembic mcp_server.py load_tests }
+        Invoke-Checked { & .\.venv\Scripts\python.exe -m ruff check app tests alembic mcp_server.py load_tests }
         Invoke-Checked { & .\.venv\Scripts\python.exe -m pytest -q }
     }
     finally {

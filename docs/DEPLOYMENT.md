@@ -66,6 +66,13 @@ GEMINI_API_KEY=<secret>
 ALLOWED_ORIGINS=<explicit HTTPS origins>
 RATE_LIMIT_BACKEND=redis
 REDIS_URL=<private Redis URL>
+MFA_ENCRYPTION_KEY=<separate 32+ random characters>
+MEDIA_STORAGE_BACKEND=s3
+OBJECT_STORAGE_BUCKET=<private bucket>
+OBJECT_STORAGE_REGION=<region>
+OBJECT_STORAGE_ENDPOINT_URL=<optional S3-compatible endpoint>
+RATE_LIMIT_BACKEND=redis
+REDIS_URL=<private Redis URL>
 ```
 
 The prototype container runs `alembic upgrade head` before Uvicorn and exposes `/health/ready` for health checks. This

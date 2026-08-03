@@ -1,3 +1,4 @@
+import tempfile
 from dataclasses import dataclass
 from mimetypes import guess_type
 from pathlib import Path
@@ -47,6 +48,24 @@ class StoredMedia:
     file_size_bytes: int
 
 
+def is_object_storage(settings: Settings) -> bool:
+    return settings.media_storage_backend.strip().lower() == "s3"
+
+
+def _s3_client(settings: Settings):
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("boto3 is required when MEDIA_STORAGE_BACKEND=s3") from exc
+    if not settings.object_storage_bucket:
+        raise RuntimeError("OBJECT_STORAGE_BUCKET is required for object storage")
+    return boto3.client(
+        "s3",
+        region_name=settings.object_storage_region,
+        endpoint_url=settings.object_storage_endpoint_url,
+    )
+
+
 def storage_root(settings: Settings) -> Path:
     root = Path(settings.media_storage_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -91,10 +110,34 @@ def save_upload(
         suffix = EXTENSION_BY_MIME[mime_type]
 
     storage_key = f"lesson-media/{uuid4().hex}{suffix}"
-    destination = resolve_storage_path(settings, storage_key)
-    destination.parent.mkdir(parents=True, exist_ok=True)
     maximum_bytes = max(1, settings.media_max_size_mb) * 1024 * 1024
     total = 0
+    if is_object_storage(settings):
+        temporary_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False) as temporary:
+                temporary_path = temporary.name
+                while True:
+                    chunk = upload.file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > maximum_bytes:
+                        raise ValueError(f"Media file exceeds {settings.media_max_size_mb} MB")
+                    temporary.write(chunk)
+            _s3_client(settings).upload_file(
+                temporary_path,
+                settings.object_storage_bucket,
+                storage_key,
+                ExtraArgs={"ContentType": mime_type},
+            )
+        finally:
+            if temporary_path:
+                Path(temporary_path).unlink(missing_ok=True)
+        return StoredMedia(storage_key=storage_key, mime_type=mime_type, file_size_bytes=total)
+
+    destination = resolve_storage_path(settings, storage_key)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with destination.open("wb") as target:
             while True:
@@ -118,5 +161,18 @@ def save_upload(
 def delete_stored_media(settings: Settings, storage_key: str | None) -> None:
     if not storage_key:
         return
+    if is_object_storage(settings):
+        _s3_client(settings).delete_object(Bucket=settings.object_storage_bucket, Key=storage_key)
+        return
     path = resolve_storage_path(settings, storage_key)
     path.unlink(missing_ok=True)
+
+
+def presigned_media_url(settings: Settings, storage_key: str, expires_seconds: int = 300) -> str:
+    if not is_object_storage(settings):
+        raise RuntimeError("Presigned URLs require object storage")
+    return _s3_client(settings).generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.object_storage_bucket, "Key": storage_key},
+        ExpiresIn=max(60, min(expires_seconds, 3600)),
+    )

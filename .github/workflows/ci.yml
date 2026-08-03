@@ -40,8 +40,8 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
-      - run: python -m ruff format --check app tests alembic mcp_server.py
-      - run: python -m ruff check app tests alembic mcp_server.py
+      - run: python -m ruff format --check app tests alembic mcp_server.py load_tests
+      - run: python -m ruff check app tests alembic mcp_server.py load_tests
       - name: Audit production Python dependencies
         run: python -m pip_audit --requirement requirements.txt
       - run: python -m pytest -q

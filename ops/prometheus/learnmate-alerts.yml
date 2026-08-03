@@ -1,0 +1,30 @@
+groups:
+  - name: learnmate-api
+    rules:
+      - alert: LearnMateHigh5xxRate
+        expr: |
+          sum(rate(learnmate_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(learnmate_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: LearnMate API 5xx rate is above 5%
+          runbook: docs/OPERATIONS.md
+      - alert: LearnMateQueueBacklog
+        expr: max(learnmate_queue_depth) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: LearnMate worker queue depth is above 100
+          runbook: docs/OPERATIONS.md
+      - alert: LearnMateNoSuccessfulTraffic
+        expr: sum(rate(learnmate_http_requests_total{status=~"2.."}[15m])) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: LearnMate has no successful HTTP traffic
+          runbook: docs/OPERATIONS.md

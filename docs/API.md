@@ -230,6 +230,11 @@ upcoming assignments and submission/feedback state; they do not expose or update
 
 Validation errors use HTTP `422`, authentication failures `401`, ownership-safe missing resources `404`, conflicts `409`, and upstream AI failures `502`.
 
+## Observability
+
+`GET /metrics` returns low-cardinality Prometheus text for internal scraping. Every API response also includes an
+`X-Request-ID` correlation header.
+
 ## Administration
 
 All administration endpoints require a JWT belonging to an active user whose role is `admin`:

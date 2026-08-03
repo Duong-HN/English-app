@@ -24,8 +24,13 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = 45
 
     media_storage_dir: str = "./media"
+    media_storage_backend: str = "local"
     media_max_size_mb: int = 100
     media_public_base_url: str | None = None
+    media_cdn_base_url: str | None = None
+    object_storage_bucket: str | None = None
+    object_storage_region: str = "us-east-1"
+    object_storage_endpoint_url: str | None = None
     rate_limit_enabled: bool = True
     rate_limit_window_seconds: int = 60
     rate_limit_backend: str = "memory"
@@ -63,6 +68,10 @@ class Settings(BaseSettings):
                 raise ValueError("ALLOWED_ORIGINS must contain explicit HTTPS production origins")
             if not self.media_public_base_url or not self.media_public_base_url.startswith("https://"):
                 raise ValueError("MEDIA_PUBLIC_BASE_URL must be an HTTPS URL in production")
+            if self.media_storage_backend.lower() != "s3" or not self.object_storage_bucket:
+                raise ValueError("Production requires MEDIA_STORAGE_BACKEND=s3 and OBJECT_STORAGE_BUCKET")
+            if self.media_cdn_base_url and not self.media_cdn_base_url.startswith("https://"):
+                raise ValueError("MEDIA_CDN_BASE_URL must be an HTTPS URL")
             if not self.rate_limit_enabled:
                 raise ValueError("RATE_LIMIT_ENABLED must be true in production")
             if self.rate_limit_window_seconds < 1:
