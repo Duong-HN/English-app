@@ -239,7 +239,9 @@ Learner nhận invite code
   → Home hiện bài từ giáo viên
   → Lớp → mở assignment
   → làm bài / nộp bài
-  → backend chạy AI analysis khi phù hợp
+  → POST /api/v1/assignments/{id}/submit trả 202
+  → mobile polling /api/v1/assignment-grading-jobs/{job_id}
+  → worker chạy AI và lưu kết quả
   → xem teacher feedback
 ```
 

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from assignment_job_helpers import complete_assignment_submission
 from fastapi.testclient import TestClient
 from job_helpers import complete_legacy_learning_path
 from sqlalchemy import func, select
@@ -285,20 +286,22 @@ def test_assignment_analysis_feedback_and_space_isolation(client, db_session):
     )
     assert outsider_submit.status_code == 404
 
-    submitted = client.post(
-        f"/api/v1/assignments/{assignment['id']}/submit",
-        headers=learner_headers,
-        json={"input_text": "Dear colleague, I am following up about our project meeting."},
+    submitted = complete_assignment_submission(
+        client,
+        assignment["id"],
+        learner["access_token"],
+        "Dear colleague, I am following up about our project meeting.",
     )
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["analysis"]["type"] == "writing"
     submission_id = submitted.json()["id"]
     analysis_id = submitted.json()["analysis"]["id"]
 
-    resubmitted = client.post(
-        f"/api/v1/assignments/{assignment['id']}/submit",
-        headers=learner_headers,
-        json={"input_text": "Dear colleague, could you please confirm our project meeting time?"},
+    resubmitted = complete_assignment_submission(
+        client,
+        assignment["id"],
+        learner["access_token"],
+        "Dear colleague, could you please confirm our project meeting time?",
     )
     assert resubmitted.status_code == 200
     assert resubmitted.json()["id"] == submission_id

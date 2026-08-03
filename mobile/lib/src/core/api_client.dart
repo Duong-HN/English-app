@@ -33,6 +33,8 @@ class ApiClient {
   static const _analysisMaxPolls = 120;
   static const _learningPathPollInterval = Duration(milliseconds: 500);
   static const _learningPathMaxPolls = 120;
+  static const _assignmentGradingPollInterval = Duration(milliseconds: 500);
+  static const _assignmentGradingMaxPolls = 120;
 
   Future<Map<String, dynamic>> register({
     required String email,
@@ -411,11 +413,41 @@ class ApiClient {
   Future<Map<String, dynamic>> submitAssignment({
     required String assignmentId,
     required String inputText,
-  }) {
-    return _post(
+    void Function(String status)? onStatus,
+  }) async {
+    final encodedId = Uri.encodeComponent(assignmentId);
+    var current = await _post(
       '/api/v1/assignments/$assignmentId/submit',
       body: {'input_text': inputText},
+      extraHeaders: {
+        'Idempotency-Key':
+            'mobile-assignment-$encodedId-${DateTime.now().microsecondsSinceEpoch}',
+      },
     );
+    onStatus?.call(current['status']?.toString() ?? 'queued');
+    for (var attempt = 0; attempt < _assignmentGradingMaxPolls; attempt++) {
+      final status = current['status']?.toString();
+      if (status == 'succeeded') {
+        final submission = await assignmentSubmission(assignmentId);
+        onStatus?.call(submission['status']?.toString() ?? 'submitted');
+        return submission;
+      }
+      if (status == 'failed') {
+        onStatus?.call('failed');
+        throw ApiException(
+          current['error_message']?.toString() ??
+              'Không thể chấm bài tập. Hãy thử lại sau.',
+        );
+      }
+      if (attempt > 0) {
+        await Future<void>.delayed(_assignmentGradingPollInterval);
+      }
+      current = await _get(
+        '/api/v1/assignment-grading-jobs/${Uri.encodeComponent(current['id'].toString())}',
+      );
+      onStatus?.call(current['status']?.toString() ?? 'processing');
+    }
+    throw const ApiException('AI chấm bài quá lâu. Hãy thử lại sau.');
   }
 
   Future<Map<String, dynamic>> assignmentSubmission(String assignmentId) {

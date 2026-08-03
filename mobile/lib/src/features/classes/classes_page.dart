@@ -400,14 +400,22 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
   bool _loadingSubmission = false;
   String? _error;
   String? _loadError;
+  String? _submissionStatus;
   Map<String, dynamic>? _submission;
 
   String get _assignmentId =>
       _firstText(widget.assignment, const ['id', 'assignment_id']) ?? '';
 
+  bool get _isGrading =>
+      _submissionStatus == 'queued' || _submissionStatus == 'processing';
+
   @override
   void initState() {
     super.initState();
+    _submissionStatus = _firstText(widget.assignment, const [
+      'submission_status',
+      'status',
+    ]);
     _textController.text =
         _firstText(widget.assignment, const ['input_text', 'answer']) ?? '';
     final hasSubmission =
@@ -443,6 +451,7 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
       final inputText = response['input_text']?.toString();
       setState(() {
         _submission = response;
+        _submissionStatus = response['status']?.toString();
         if (inputText != null) _textController.text = inputText;
       });
     } on ApiException catch (exception) {
@@ -472,16 +481,32 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
       final response = await widget.apiClient.submitAssignment(
         assignmentId: _assignmentId,
         inputText: text,
+        onStatus: (status) {
+          if (mounted) setState(() => _submissionStatus = status);
+        },
       );
       if (!mounted) return;
-      setState(() => _submission = response);
+      setState(() {
+        _submission = response;
+        _submissionStatus = response['status']?.toString() ?? 'submitted';
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Đã nộp bài.')));
     } on ApiException catch (exception) {
-      if (mounted) setState(() => _error = exception.message);
+      if (mounted) {
+        setState(() {
+          _error = exception.message;
+          _submissionStatus = 'failed';
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Không thể nộp bài.');
+      if (mounted) {
+        setState(() {
+          _submissionStatus = 'failed';
+          _error = 'Không thể nộp bài.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -498,10 +523,20 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
       'description',
     ]);
     final feedbackSource = _submission ?? widget.assignment;
+    final submissionStatus = _firstText(feedbackSource, const ['status']);
+    final canShowAnalysis =
+        submissionStatus == null ||
+        const {
+          'submitted',
+          'reviewed',
+          'completed',
+        }.contains(submissionStatus.toLowerCase());
     final analysis = _asMap(
-      feedbackSource['analysis'] ??
-          feedbackSource['result'] ??
-          feedbackSource['ai_feedback'],
+      canShowAnalysis
+          ? (feedbackSource['analysis'] ??
+                feedbackSource['result'] ??
+                feedbackSource['ai_feedback'])
+          : null,
     );
     final analysisResult = _asMap(analysis?['result']) ?? analysis;
     final teacherFeedback = _firstText(feedbackSource, const [
@@ -531,6 +566,28 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
             ),
             const SizedBox(height: 12),
           ],
+          if (_submissionStatus != null) ...[
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  _submissionStatus == 'failed'
+                      ? Icons.error_outline
+                      : _submissionStatus == 'submitted' ||
+                            _submissionStatus == 'reviewed'
+                      ? Icons.check_circle_outline
+                      : Icons.hourglass_top,
+                ),
+                title: Text(_statusLabel(_submissionStatus!)),
+                trailing: _submissionStatus == 'failed'
+                    ? TextButton(
+                        onPressed: _submitting ? null : _submit,
+                        child: const Text('Thá»­ láº¡i'),
+                      )
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (instructions != null) ...[
             Text('Yêu cầu', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
@@ -545,7 +602,7 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
           TextField(
             key: const Key('assignment-input'),
             controller: _textController,
-            enabled: !_loadingSubmission,
+            enabled: !_loadingSubmission && !_isGrading,
             minLines: 7,
             maxLines: 16,
             decoration: const InputDecoration(
@@ -564,7 +621,9 @@ class _AssignmentSubmissionPageState extends State<AssignmentSubmissionPage> {
           const SizedBox(height: 12),
           FilledButton.icon(
             key: const Key('submit-assignment'),
-            onPressed: _submitting || _loadingSubmission ? null : _submit,
+            onPressed: _submitting || _loadingSubmission || _isGrading
+                ? null
+                : _submit,
             icon: _submitting
                 ? const SizedBox.square(
                     dimension: 18,
@@ -696,6 +755,10 @@ String _skillLabel(String value) => switch (value.toLowerCase()) {
 };
 
 String _statusLabel(String value) => switch (value.toLowerCase()) {
+  'queued' => 'Đang chờ xử lý',
+  'processing' => 'Đang xử lý',
+  'succeeded' => 'Đã chấm',
+  'failed' => 'Thất bại',
   'submitted' => 'Đã nộp',
   'reviewed' => 'Đã nhận xét',
   'completed' => 'Hoàn thành',

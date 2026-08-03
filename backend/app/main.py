@@ -11,6 +11,7 @@ from .routers import (
     admin,
     analyses,
     analysis_jobs,
+    assignment_jobs,
     auth,
     classes,
     content,
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     application.include_router(auth.router, prefix="/api/v1")
     application.include_router(analyses.router, prefix="/api/v1")
     application.include_router(analysis_jobs.router, prefix="/api/v1")
+    application.include_router(assignment_jobs.router, prefix="/api/v1")
     application.include_router(learning_paths.router, prefix="/api/v1")
     application.include_router(learning_path_jobs.router, prefix="/api/v1")
     application.include_router(learning_spaces.router, prefix="/api/v1")

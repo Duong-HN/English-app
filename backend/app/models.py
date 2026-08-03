@@ -440,6 +440,50 @@ class AssignmentSubmission(Base):
     analysis: Mapped[Analysis | None] = relationship()
 
 
+class AssignmentGradingJob(Base):
+    """Durable asynchronous AI grading job for a classroom submission."""
+
+    __tablename__ = "assignment_grading_jobs"
+    __table_args__ = (
+        Index("ix_assignment_grading_jobs_status_available", "status", "available_at"),
+        Index(
+            "uq_assignment_grading_job_active_submission",
+            "assignment_id",
+            "learner_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'processing')"),
+            postgresql_where=text("status IN ('queued', 'processing')"),
+        ),
+        UniqueConstraint("learner_id", "idempotency_key", name="uq_assignment_grading_job_user_idempotency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    assignment_id: Mapped[str] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    learner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("assignment_submissions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    skill: Mapped[str] = mapped_column(String(32), index=True)
+    input_text: Mapped[str] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    analysis_id: Mapped[str | None] = mapped_column(
+        ForeignKey("analyses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class VocabularyItem(Base):
     __tablename__ = "vocabulary_items"
     __table_args__ = (

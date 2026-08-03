@@ -164,6 +164,25 @@ class AnalysisJobResponse(BaseModel):
     updated_at: datetime | None
 
 
+class AssignmentGradingJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    assignment_id: str
+    learner_id: str
+    submission_id: str
+    skill: AnalysisType
+    status: AnalysisJobStatus
+    analysis_id: str | None
+    provider: str | None
+    error_message: str | None
+    attempt_count: int
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    updated_at: datetime | None
+
+
 class HistoryResponse(BaseModel):
     items: list[AnalysisResponse]
     total: int

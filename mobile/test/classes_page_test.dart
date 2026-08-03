@@ -103,12 +103,17 @@ void main() {
             'total': 1,
           });
         }
-        if (request.method == 'POST' &&
-            request.url.path == '/api/v1/assignments/assignment-1/submit') {
-          expect(
-            (jsonDecode(request.body) as Map<String, dynamic>)['input_text'],
-            'My hometown is peaceful and friendly.',
-          );
+        if (request.method == 'GET' &&
+            request.url.path ==
+                '/api/v1/assignment-grading-jobs/grading-job-1') {
+          return jsonResponse({
+            'id': 'grading-job-1',
+            'status': 'succeeded',
+            'analysis_id': 'analysis-1',
+          });
+        }
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/assignments/assignment-1/submission') {
           return jsonResponse({
             'id': 'submission-1',
             'status': 'submitted',
@@ -117,6 +122,14 @@ void main() {
               'result': {'summary': 'A clear and relevant paragraph.'},
             },
           });
+        }
+        if (request.method == 'POST' &&
+            request.url.path == '/api/v1/assignments/assignment-1/submit') {
+          expect(
+            (jsonDecode(request.body) as Map<String, dynamic>)['input_text'],
+            'My hometown is peaceful and friendly.',
+          );
+          return jsonResponse({'id': 'grading-job-1', 'status': 'queued'}, 202);
         }
         return jsonResponse({'detail': 'Unexpected request'}, 500);
       }),

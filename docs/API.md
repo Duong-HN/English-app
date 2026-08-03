@@ -183,7 +183,8 @@ learner to `teacher` through `/admin/users/{id}` is rejected so every teacher ac
 - `GET /classes/{id}/members` — private owner/administrator member list.
 - `POST /classes/{id}/assignments` — owner (or administrator) creates an assignment.
 - `GET /classes/{id}/assignments` — owner or joined learner list; learner items include submission state.
-- `POST /assignments/{id}/submit` — joined learner submits/resubmits text for structured AI analysis.
+- `POST /assignments/{id}/submit` — joined learner queues a submission for asynchronous AI grading; returns `202` with a grading job.
+- `GET /assignment-grading-jobs/{id}` — learner polls grading status until `succeeded` or `failed`.
 - `GET /assignments/{id}/submission` — learner retrieves their own analysis and latest teacher feedback.
 - `GET /assignments/{id}/submissions` — owner/administrator review queue.
 - `PATCH /submissions/{id}/feedback` — owner/administrator saves teacher feedback.
@@ -199,8 +200,9 @@ learner to `teacher` through `/admin/users/{id}` is rejected so every teacher ac
 ```
 
 Skills are limited to `reading`, `writing` and `speaking`; deadlines must be future timezone-aware timestamps and
-late submission is rejected. Resubmission updates the same submission and analysis records, so retries do not create
-duplicate work. AI output is nested under `analysis`; feedback is submitted as `{ "feedback": "..." }`.
+late submission is rejected. Resubmission updates the same submission and analysis records after the worker succeeds.
+The `Idempotency-Key` header makes a retry safe while a grading job is queued or processing. AI output is nested under
+`analysis`; feedback is submitted as `{ "feedback": "..." }`.
 
 ## Learner home
 

@@ -324,11 +324,24 @@ function TeacherDashboard({ session, onLogout }: { session: Session; onLogout: (
   useEffect(() => {
     if (!selectedAssignmentId) return;
     let active = true;
-    api.assignmentSubmissions(selectedAssignmentId)
-      .then((response) => active && setSubmissions(response.items))
-      .catch((reason) => active && setError(readableError(reason)))
-      .finally(() => active && setSubmissionLoading(false));
-    return () => { active = false; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      api.assignmentSubmissions(selectedAssignmentId)
+        .then((response) => {
+          if (!active) return;
+          setSubmissions(response.items);
+          if (response.items.some((item) => item.status === "processing")) {
+            timer = setTimeout(load, 2000);
+          }
+        })
+        .catch((reason) => active && setError(readableError(reason)))
+        .finally(() => active && setSubmissionLoading(false));
+    };
+    load();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
   }, [api, selectedAssignmentId]);
 
   const selectedClass = classes.find((item) => item.id === selectedClassId) ?? null;
@@ -553,18 +566,29 @@ function SubmissionReview({
   onSave: (submissionId: string, feedback: string) => Promise<void>;
 }) {
   const [feedback, setFeedback] = useState(submission.teacher_feedback ?? "");
+  const canReview = submission.analysis != null && ["submitted", "reviewed"].includes(submission.status);
   return (
     <article className="submission-card">
       <header>
         <div><strong>{submission.learner_name}</strong><small>{submission.learner_id}</small></div>
-        <span className="provider-badge">{submission.analysis?.score == null ? submission.status : `${submission.analysis.score}/10`}</span>
+        <span className="provider-badge">{submission.analysis?.score == null ? submissionStatusLabel(submission.status) : `${submission.analysis.score}/10`}</span>
       </header>
       {submission.input_text && <p>{submission.input_text}</p>}
       {submission.analysis?.result && <details><summary>Xem phản hồi AI</summary><pre>{JSON.stringify(submission.analysis.result, null, 2)}</pre></details>}
-      <label className="field"><span>Nhận xét của giáo viên</span><textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Điểm tốt và điều cần sửa…" /></label>
-      <button type="button" className="secondary-button" disabled={busy || !feedback.trim()} onClick={() => void onSave(submission.id, feedback.trim())}>Lưu nhận xét</button>
+      <label className="field"><span>Nhận xét của giáo viên</span><textarea rows={3} disabled={!canReview} value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder={canReview ? "Điểm tốt và điều cần sửa…" : "Chờ AI chấm xong trước khi nhận xét…"} /></label>
+      <button type="button" className="secondary-button" disabled={busy || !canReview || !feedback.trim()} onClick={() => void onSave(submission.id, feedback.trim())}>Lưu nhận xét</button>
     </article>
   );
+}
+
+function submissionStatusLabel(status: string) {
+  switch (status) {
+    case "processing": return "Đang xử lý";
+    case "submitted": return "Đã chấm — chờ nhận xét";
+    case "reviewed": return "Đã nhận xét";
+    case "failed": return "Chấm thất bại";
+    default: return status;
+  }
 }
 
 function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {

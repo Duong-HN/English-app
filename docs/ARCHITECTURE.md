@@ -82,7 +82,8 @@ Learner -> API: complete onboarding
 API -> AI/Database: validate and persist one seven-day path in self space
 Teacher -> API: class + assignment + deadline
 Learner or approved teacher -> API: assignment submission in the class space
-API -> AI/Database: structured analysis + idempotent submission
+API -> assignment grading queue: validate, persist submission state and enqueue idempotent job
+Worker -> AI/Database: structured analysis and submission completion
 Teacher -> API: review submission and save feedback
 API -> Learner or approved teacher: home for the selected space only
 ```
@@ -162,8 +163,10 @@ resume on another device. A legacy learner with an existing path is backfilled a
 
 `classes` belongs to exactly one teacher and has a unique invite code. `class_members` is unique by class and learner.
 `assignments` belongs to a class and validates its skill, estimated duration and deadline. `assignment_submissions` is
-unique by assignment and learner and points to the persisted `analyses` result. A resubmission updates the existing
-records. Teacher ownership is enforced on member lists, submission review and feedback; learners can only see classes
+unique by assignment and learner and points to the persisted `analyses` result. `assignment_grading_jobs` stores the
+queue state, retry metadata and idempotency fingerprint; the worker changes a submission from `processing` to
+`submitted` only after a successful provider call. A resubmission updates the existing records. Teacher ownership is
+enforced on member lists, submission review and feedback; learners can only see classes
 they joined. Administrator access is explicit and does not turn teachers into administrators.
 
 ## Security boundaries

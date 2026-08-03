@@ -1,13 +1,11 @@
 import secrets
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..ai import build_provider
-from ..config import Settings, get_settings
 from ..db import get_db
 from ..dependencies import (
     get_current_user,
@@ -29,6 +27,7 @@ from ..models import (
 from ..schemas import (
     AnalysisResponse,
     AssignmentCreateRequest,
+    AssignmentGradingJobResponse,
     AssignmentListResponse,
     AssignmentResponse,
     AssignmentSubmissionListResponse,
@@ -42,7 +41,7 @@ from ..schemas import (
     ClassResponse,
     SubmissionFeedbackUpdate,
 )
-from .vocabulary import upsert_analysis_vocabulary
+from .assignment_jobs import enqueue_assignment_grading_job
 
 router = APIRouter(tags=["classes and assignments"])
 INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -354,13 +353,17 @@ def list_assignments(
     )
 
 
-@router.post("/assignments/{assignment_id}/submit", response_model=AssignmentSubmissionResponse)
-async def submit_assignment(
+@router.post(
+    "/assignments/{assignment_id}/submit",
+    response_model=AssignmentGradingJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def submit_assignment(
     assignment_id: str,
     request: AssignmentSubmitRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     learner: User = Depends(require_learner),
-    settings: Settings = Depends(get_settings),
 ):
     assignment = db.get(Assignment, assignment_id)
     if assignment is None:
@@ -373,66 +376,21 @@ async def submit_assignment(
     )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    learner_space = ensure_class_space(db, learner, db.get(Classroom, assignment.class_id))
+    classroom = db.get(Classroom, assignment.class_id)
+    if classroom is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Assignment class is missing",
+        )
     if utc_now() > _as_utc(assignment.due_at):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assignment deadline has passed")
-
-    provider = build_provider(settings)
-    try:
-        result = await provider.analyze(assignment.skill, request.input_text)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider failed") from exc
-
-    submission = db.scalar(
-        select(AssignmentSubmission).where(
-            AssignmentSubmission.assignment_id == assignment.id,
-            AssignmentSubmission.learner_id == learner.id,
-        )
+    return enqueue_assignment_grading_job(
+        assignment=assignment,
+        learner=learner,
+        input_text=request.input_text,
+        db=db,
+        idempotency_key=idempotency_key,
     )
-    analysis = db.get(Analysis, submission.analysis_id) if submission and submission.analysis_id else None
-    score = result.get("score")
-    if analysis is None:
-        analysis = Analysis(
-            user_id=learner.id,
-            space_id=learner_space.id,
-            type=assignment.skill,
-            input_text=request.input_text,
-            result=result,
-            score=float(score) if score is not None else None,
-            provider=provider.name,
-        )
-        db.add(analysis)
-        db.flush()
-    else:
-        analysis.input_text = request.input_text
-        analysis.result = result
-        analysis.score = float(score) if score is not None else None
-        analysis.provider = provider.name
-    if assignment.skill == "reading":
-        upsert_analysis_vocabulary(db, learner, analysis)
-
-    now = utc_now()
-    if submission is None:
-        submission = AssignmentSubmission(
-            assignment_id=assignment.id,
-            learner_id=learner.id,
-            analysis_id=analysis.id,
-            input_text=request.input_text,
-            submitted_at=now,
-        )
-        db.add(submission)
-    else:
-        submission.analysis_id = analysis.id
-        submission.input_text = request.input_text
-        submission.status = "submitted"
-        submission.teacher_feedback = None
-        submission.feedback_at = None
-        submission.submitted_at = now
-        submission.updated_at = now
-    db.commit()
-    db.refresh(submission)
-    db.refresh(analysis)
-    return _submission_response(submission, learner, analysis)
 
 
 @router.get(

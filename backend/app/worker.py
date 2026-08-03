@@ -20,7 +20,22 @@ from .config import get_settings
 from .content_catalog import recommended_course_code
 from .db import SessionLocal
 from .learning_path_service import adapt_learning_path_record, create_learning_path_record
-from .models import AnalysisJob, LearnerProfile, LearningPath, LearningPathJob, LearningSpace, User, utc_now
+from .learning_spaces import ensure_class_space
+from .models import (
+    Analysis,
+    AnalysisJob,
+    Assignment,
+    AssignmentGradingJob,
+    AssignmentSubmission,
+    Classroom,
+    LearnerProfile,
+    LearningPath,
+    LearningPathJob,
+    LearningSpace,
+    User,
+    utc_now,
+)
+from .routers.vocabulary import upsert_analysis_vocabulary
 from .schemas import AnalysisRequest
 
 logger = logging.getLogger(__name__)
@@ -31,7 +46,7 @@ STALE_AFTER_SECONDS = 900
 
 def recover_stale_jobs(db: Session) -> None:
     stale_before = utc_now() - timedelta(seconds=STALE_AFTER_SECONDS)
-    for model in (AnalysisJob, LearningPathJob):
+    for model in (AnalysisJob, LearningPathJob, AssignmentGradingJob):
         statement = select(model).where(
             model.status == "processing",
             model.started_at < stale_before,
@@ -47,6 +62,11 @@ def recover_stale_jobs(db: Session) -> None:
                 job.status = "failed"
                 job.completed_at = utc_now()
                 job.error_message = "Worker lease expired after maximum attempts"
+                if isinstance(job, AssignmentGradingJob):
+                    submission = db.get(AssignmentSubmission, job.submission_id)
+                    if submission is not None:
+                        submission.status = "failed"
+                        submission.updated_at = utc_now()
             job.updated_at = utc_now()
     db.commit()
 
@@ -119,6 +139,45 @@ def _mark_learning_path_failure(db: Session, job: LearningPathJob, message: str)
     else:
         job.status = "failed"
         job.completed_at = utc_now()
+    db.commit()
+
+
+def claim_next_assignment_grading_job(db: Session) -> str | None:
+    statement = (
+        select(AssignmentGradingJob)
+        .where(
+            AssignmentGradingJob.status == "queued",
+            AssignmentGradingJob.available_at <= utc_now(),
+        )
+        .order_by(AssignmentGradingJob.created_at)
+        .limit(1)
+    )
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        statement = statement.with_for_update(skip_locked=True)
+    job = db.scalar(statement)
+    if job is None:
+        return None
+    job.status = "processing"
+    job.attempt_count += 1
+    job.started_at = utc_now()
+    job.updated_at = utc_now()
+    db.commit()
+    return job.id
+
+
+def _mark_assignment_grading_failure(db: Session, job: AssignmentGradingJob, message: str) -> None:
+    job.error_message = message[:500]
+    job.updated_at = utc_now()
+    if job.attempt_count < MAX_ATTEMPTS:
+        job.status = "queued"
+        job.available_at = utc_now() + timedelta(seconds=RETRY_DELAYS[job.attempt_count - 1])
+    else:
+        job.status = "failed"
+        job.completed_at = utc_now()
+        submission = db.get(AssignmentSubmission, job.submission_id)
+        if submission is not None:
+            submission.status = "failed"
+            submission.updated_at = utc_now()
     db.commit()
 
 
@@ -236,6 +295,71 @@ async def process_learning_path_job(job_id: str) -> None:
             )
 
 
+async def process_assignment_grading_job(job_id: str) -> None:
+    settings = get_settings()
+    with SessionLocal() as db:
+        job = db.get(AssignmentGradingJob, job_id)
+        if job is None or job.status != "processing":
+            return
+        assignment = db.get(Assignment, job.assignment_id)
+        learner = db.get(User, job.learner_id)
+        submission = db.get(AssignmentSubmission, job.submission_id)
+        classroom = db.get(Classroom, assignment.class_id) if assignment is not None else None
+        if assignment is None or learner is None or submission is None or classroom is None:
+            _mark_assignment_grading_failure(db, job, "Assignment grading context is unavailable")
+            return
+        try:
+            provider = build_provider(settings)
+            result = await provider.analyze(job.skill, job.input_text)
+            space = ensure_class_space(db, learner, classroom)
+            analysis = db.get(Analysis, submission.analysis_id) if submission.analysis_id else None
+            score = result.get("score")
+            if analysis is None:
+                analysis = Analysis(
+                    user_id=learner.id,
+                    space_id=space.id,
+                    type=job.skill,
+                    input_text=job.input_text,
+                    result=result,
+                    score=float(score) if score is not None else None,
+                    provider=provider.name,
+                )
+                db.add(analysis)
+                db.flush()
+            else:
+                analysis.input_text = job.input_text
+                analysis.result = result
+                analysis.score = float(score) if score is not None else None
+                analysis.provider = provider.name
+            if job.skill == "reading":
+                upsert_analysis_vocabulary(db, learner, analysis)
+
+            now = utc_now()
+            submission.analysis_id = analysis.id
+            submission.input_text = job.input_text
+            submission.status = "submitted"
+            submission.submitted_at = now
+            submission.updated_at = now
+            job.status = "succeeded"
+            job.analysis_id = analysis.id
+            job.provider = provider.name
+            job.error_message = None
+            job.completed_at = now
+            job.updated_at = now
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Assignment grading job failed",
+                extra={"job_id": job_id, "attempt": job.attempt_count},
+            )
+            _mark_assignment_grading_failure(
+                db,
+                job,
+                "AI provider failed; retry is scheduled when attempts remain",
+            )
+
+
 def process_one() -> bool:
     with SessionLocal() as db:
         job_id = claim_next_job(db)
@@ -243,12 +367,17 @@ def process_one() -> bool:
         if job_id is None:
             job_id = claim_next_learning_path_job(db)
             job_kind = "learning_path"
+        if job_id is None:
+            job_id = claim_next_assignment_grading_job(db)
+            job_kind = "assignment_grading"
     if job_id is None:
         return False
     if job_kind == "analysis":
         asyncio.run(process_job(job_id))
-    else:
+    elif job_kind == "learning_path":
         asyncio.run(process_learning_path_job(job_id))
+    else:
+        asyncio.run(process_assignment_grading_job(job_id))
     return True
 
 
