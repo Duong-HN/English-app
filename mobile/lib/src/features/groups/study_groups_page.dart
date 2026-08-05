@@ -287,8 +287,11 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 6),
-                    ...invitations.map(
-                      (invitation) => Card(
+                    ...invitations.map((invitation) {
+                      final canApprove =
+                          invitation['inviter_id']?.toString() ==
+                          widget.authController?.user?['id']?.toString();
+                      return Card(
                         child: ListTile(
                           title: Text(
                             invitation['group_name']?.toString() ??
@@ -297,23 +300,27 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
                           subtitle: Text(
                             '${invitation['invitee_name'] ?? 'Learner'} · ${invitation['kind'] ?? 'request'}',
                           ),
-                          trailing: FilledButton.tonal(
-                            onPressed: () async {
-                              try {
-                                await widget.apiClient
-                                    .approveStudyGroupInvitation(
-                                      invitation['id']?.toString() ?? '',
-                                    );
-                                await _refresh();
-                              } on ApiException catch (exception) {
-                                if (mounted) _showMessage(exception.message);
-                              }
-                            },
-                            child: const Text('Approve'),
-                          ),
+                          trailing: canApprove
+                              ? FilledButton.tonal(
+                                  onPressed: () async {
+                                    try {
+                                      await widget.apiClient
+                                          .approveStudyGroupInvitation(
+                                            invitation['id']?.toString() ?? '',
+                                          );
+                                      await _refresh();
+                                    } on ApiException catch (exception) {
+                                      if (mounted) {
+                                        _showMessage(exception.message);
+                                      }
+                                    }
+                                  },
+                                  child: const Text('Approve'),
+                                )
+                              : const Text('Pending approval'),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                   ],
                 );
               },
