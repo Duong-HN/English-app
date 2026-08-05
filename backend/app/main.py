@@ -20,6 +20,7 @@ from .routers import (
     learning_path_jobs,
     learning_paths,
     learning_spaces,
+    notifications,
     onboarding,
     placement,
     study_groups,
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     application.include_router(learning_paths.router, prefix="/api/v1")
     application.include_router(learning_path_jobs.router, prefix="/api/v1")
     application.include_router(learning_spaces.router, prefix="/api/v1")
+    application.include_router(notifications.router, prefix="/api/v1")
     application.include_router(placement.router, prefix="/api/v1")
     application.include_router(vocabulary.router, prefix="/api/v1")
     application.include_router(dictionary.router, prefix="/api/v1")

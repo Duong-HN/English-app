@@ -104,7 +104,9 @@ browser and uses a separate web login/session. Set
 `TEACHER_DASHBOARD_URL` to a LAN, staging or production URL as appropriate;
 staging and production must use HTTPS. No mobile token is appended to this URL.
 
-On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. From the
+On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. The
+Nhóm học tập tab is now the primary collaboration surface: users can create or join a small group, share a deep-link
+invite, submit shared assignments and complete rubric-based peer reviews. From the
 Lớp học screen, users can also open Nhóm học tập to create or join a collaborative group. Self-study
 then resumes through goal, daily time, placement and path creation; class mode opens teacher-assigned work immediately.
 Settings can switch between self-study and every joined class. The fixed curriculum is separate from the seven-day
@@ -119,7 +121,8 @@ npm run dev
 ```
 
 Public registration creates learners. A learner can create or join study groups immediately. The older teacher application
-and Teacher Dashboard flow remains available for legacy teacher-led classes.
+and Teacher Dashboard flow remains available for legacy teacher-led classes and administration, not as the primary learner
+collaboration model.
 
 Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
 

@@ -64,9 +64,19 @@ class User(Base):
         cascade="all, delete-orphan",
         foreign_keys="Classroom.teacher_id",
     )
+    owned_study_groups: Mapped[list[StudyGroup]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        foreign_keys="StudyGroup.owner_id",
+    )
     class_memberships: Mapped[list[ClassMember]] = relationship(
         back_populates="learner",
         cascade="all, delete-orphan",
+    )
+    study_group_memberships: Mapped[list[StudyGroupMember]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="StudyGroupMember.user_id",
     )
     learning_spaces: Mapped[list[LearningSpace]] = relationship(
         back_populates="user",
@@ -79,6 +89,11 @@ class User(Base):
     assignment_submissions: Mapped[list[AssignmentSubmission]] = relationship(
         back_populates="learner",
         cascade="all, delete-orphan",
+    )
+    notifications: Mapped[list[Notification]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="Notification.created_at.desc()",
     )
     admin_audit_logs: Mapped[list[AdminAuditLog]] = relationship(
         back_populates="admin_user",
@@ -378,6 +393,74 @@ class Classroom(Base):
     )
 
 
+class StudyGroup(Base):
+    """Small learner-owned peer-learning community.
+
+    This intentionally does not inherit from or point at ``Classroom``. The
+    legacy class domain remains available for teacher-managed classes while
+    group learning evolves independently.
+    """
+
+    __tablename__ = "study_groups"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    level: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    invite_token: Mapped[str] = mapped_column(String(64), unique=True)
+    member_limit: Mapped[int] = mapped_column(default=8)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    owner: Mapped[User] = relationship(back_populates="owned_study_groups", foreign_keys=[owner_id])
+    members: Mapped[list[StudyGroupMember]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+    assignments: Mapped[list[Assignment]] = relationship(
+        back_populates="study_group",
+        cascade="all, delete-orphan",
+    )
+    invitations: Mapped[list[StudyGroupInvitation]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+
+class StudyGroupMember(Base):
+    __tablename__ = "study_group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_study_group_member"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    group_id: Mapped[str] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16), default="member")
+    status: Mapped[str] = mapped_column(String(16), default="active", index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    group: Mapped[StudyGroup] = relationship(back_populates="members")
+    user: Mapped[User] = relationship(back_populates="study_group_memberships", foreign_keys=[user_id])
+
+
+class StudyGroupInvitation(Base):
+    __tablename__ = "study_group_invitations"
+    __table_args__ = (Index("ix_study_group_invitation_status", "group_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    group_id: Mapped[str] = mapped_column(ForeignKey("study_groups.id", ondelete="CASCADE"), index=True)
+    inviter_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    invitee_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True)
+    kind: Mapped[str] = mapped_column(String(24), default="join_request")
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    group: Mapped[StudyGroup] = relationship(back_populates="invitations")
+    inviter: Mapped[User] = relationship(foreign_keys=[inviter_id])
+    invitee: Mapped[User] = relationship(foreign_keys=[invitee_id])
+
+
 class ClassMember(Base):
     __tablename__ = "class_members"
     __table_args__ = (UniqueConstraint("class_id", "learner_id", name="uq_class_member"),)
@@ -394,16 +477,31 @@ class Assignment(Base):
     __tablename__ = "assignments"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
-    class_id: Mapped[str] = mapped_column(ForeignKey("classes.id", ondelete="CASCADE"), index=True)
+    class_id: Mapped[str | None] = mapped_column(
+        ForeignKey("classes.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    study_group_id: Mapped[str | None] = mapped_column(
+        ForeignKey("study_groups.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     skill: Mapped[str] = mapped_column(String(32), index=True)
     content: Mapped[str] = mapped_column(Text)
     estimated_minutes: Mapped[int]
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    review_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    reviewers_per_submission: Mapped[int] = mapped_column(default=1)
+    rubric: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    classroom: Mapped[Classroom] = relationship(back_populates="assignments")
+    classroom: Mapped[Classroom | None] = relationship(back_populates="assignments")
+    study_group: Mapped[StudyGroup | None] = relationship(back_populates="assignments")
     creator: Mapped[User] = relationship(
         back_populates="created_assignments",
         foreign_keys=[created_by_id],
@@ -444,6 +542,10 @@ class AssignmentSubmission(Base):
         back_populates="submission",
         cascade="all, delete-orphan",
     )
+    review_allocations: Mapped[list[PeerReviewAllocation]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+    )
 
 
 class PeerReview(Base):
@@ -467,12 +569,74 @@ class PeerReview(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
     )
+    allocation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("peer_review_allocations.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
     score: Mapped[float] = mapped_column(Float)
     feedback: Mapped[str] = mapped_column(Text)
+    rubric_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
+    quality_status: Mapped[str] = mapped_column(String(24), default="accepted", index=True)
+    flagged_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     submission: Mapped[AssignmentSubmission] = relationship(back_populates="peer_reviews")
     reviewer: Mapped[User] = relationship(foreign_keys=[reviewer_id])
+    allocation: Mapped[PeerReviewAllocation | None] = relationship(
+        back_populates="peer_review",
+        foreign_keys=[allocation_id],
+    )
+
+
+class PeerReviewAllocation(Base):
+    """A server-created review task assigned to one group member."""
+
+    __tablename__ = "peer_review_allocations"
+    __table_args__ = (UniqueConstraint("submission_id", "reviewer_id", name="uq_review_allocation_target"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("assignment_submissions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submission: Mapped[AssignmentSubmission] = relationship(back_populates="review_allocations")
+    reviewer: Mapped[User] = relationship(foreign_keys=[reviewer_id])
+    peer_review: Mapped[PeerReview | None] = relationship(
+        back_populates="allocation",
+        foreign_keys="PeerReview.allocation_id",
+        uselist=False,
+    )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(48), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    user: Mapped[User] = relationship(back_populates="notifications")
+
+
+class LeaderboardSeason(Base):
+    __tablename__ = "leaderboard_seasons"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    season_key: Mapped[str] = mapped_column(String(32), unique=True)
+    label: Mapped[str] = mapped_column(String(120))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class VocabularyItem(Base):
@@ -587,7 +751,7 @@ class Lesson(Base):
     body: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    content_pack: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_pack: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     source_attribution: Mapped[str | None] = mapped_column(String(500), nullable=True)
     license_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     duration_minutes: Mapped[int] = mapped_column(default=15)
@@ -650,7 +814,7 @@ class LessonProgress(Base):
     status: Mapped[str] = mapped_column(String(24), default="started", index=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    media_progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    media_progress: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

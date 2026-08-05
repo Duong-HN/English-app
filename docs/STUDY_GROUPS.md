@@ -1,38 +1,67 @@
-# Nhóm học tập cộng tác
+# Study Groups
 
-Mô hình nhóm học tập thay thế vai trò “Teacher” trong luồng cộng tác chính: mọi tài khoản learner/teacher đều có thể tạo nhóm, mời bạn bè bằng mã nhóm, tạo bài tập và tham gia peer review. Role `teacher`, lớp cũ và Teacher Dashboard vẫn được giữ để tương thích với dữ liệu và demo hiện có.
+Study Group is the primary collaborative-learning domain in LearnMate. It is
+separate from the legacy `Classroom` domain used by Teacher Dashboard.
 
-## Luồng người dùng
+## Product flow
 
 ```text
-Người dùng đăng nhập
-  → Tạo nhóm hoặc nhập mã mời
-  → Thành viên tạo bài tập chung
-  → Mọi người nộp bài
-  → Chấm peer review cho bài của bạn khác
-  → Xem điểm và bảng xếp hạng theo cấp độ
+Create group -> share deep link/code -> join request -> owner approval
+  -> create shared assignment -> submit work
+  -> server assigns peer reviewers -> rubric review before deadline
+  -> weekly leaderboard with capped points
 ```
 
-## API chính
+Groups are small communities with a configurable limit of 4–8 members
+(default 8). The invite URI has the form:
 
-- `POST /api/v1/study-groups` — tạo nhóm; người tạo là owner và nhận mã mời.
-- `GET /api/v1/study-groups` — danh sách nhóm mà người dùng sở hữu hoặc đã tham gia.
-- `POST /api/v1/study-groups/join` — tham gia nhóm bằng `invite_code`.
-- `GET /api/v1/study-groups/{id}/members` — danh sách thành viên trong nhóm.
-- `POST /api/v1/study-groups/{id}/assignments` — bất kỳ thành viên nào cũng có thể tạo bài tập.
-- `GET /api/v1/study-groups/{id}/assignments` — bài tập chung và trạng thái nộp của người dùng hiện tại.
-- `GET /api/v1/study-groups/{id}/assignments/{assignment_id}/peer-reviews` — hàng đợi bài của bạn học cần chấm.
-- `POST /api/v1/submissions/{submission_id}/peer-reviews` — gửi hoặc cập nhật một peer review cho mỗi bài.
-- `GET /api/v1/submissions/{submission_id}/peer-reviews` — tác giả xem các peer review nhận được.
-- `GET /api/v1/leaderboards?level=B1` — bảng xếp hạng toàn hệ thống theo cấp độ.
-- `GET /api/v1/study-groups/{id}/leaderboard` — bảng xếp hạng trong nhóm.
+```text
+learnmate://study-groups/join?token=<group-token>
+```
 
-Điểm xếp hạng hiện tại được tính minh bạch theo công thức: hoàn thành một bài = 10 điểm, thực hiện một peer review = 5 điểm. Điểm trung bình nhận được được hiển thị riêng để khuyến khích chất lượng phản hồi nhưng chưa cộng vào điểm xếp hạng.
+The mobile app registers this custom scheme and opens a preview/approval flow.
 
-## Phân quyền
+## Main API
 
-- `learner` và `teacher` đều được dùng nhóm học tập.
-- Chỉ thành viên nhóm mới xem nhóm, bài tập, hàng đợi review và leaderboard của nhóm.
-- Người dùng không được peer review bài của chính mình.
-- Mỗi reviewer chỉ có một review cho một submission; gửi lại sẽ cập nhật review đó.
-- Leaderboard theo cấp độ dùng `User.level` hiện có (`A1`, `A2`, `B1`, `B2`, `C1`).
+- `POST /api/v1/study-groups` — create a group.
+- `GET /api/v1/study-groups` — list active memberships.
+- `POST /api/v1/study-groups/join` — create a pending join request using `invite_code` or `invite_token`.
+- `GET /api/v1/study-groups/invite-preview/{token}` — preview a deep-link invite.
+- `GET /api/v1/study-groups/invitations` — list pending requests/invitations.
+- `POST /api/v1/study-groups/invitations/{id}/approve` — owner approves a request.
+- `POST /api/v1/study-groups/invitations/{id}/decline` — requester/owner declines.
+- `POST /api/v1/study-groups/{id}/assignments` — any active member creates an assignment.
+- `GET /api/v1/study-groups/{id}/assignments` — list group assignments.
+- `GET /api/v1/study-groups/{id}/assignments/{assignment_id}/peer-reviews` — reviewer-specific queue.
+- `POST /api/v1/submissions/{submission_id}/peer-reviews` — submit rubric review.
+- `GET /api/v1/submissions/{submission_id}/peer-reviews` — author views received reviews.
+- `GET /api/v1/leaderboards?level=B1` — weekly global leaderboard.
+- `GET /api/v1/study-groups/{id}/leaderboard` — weekly group leaderboard.
+- `GET /api/v1/notifications` — group activity and review notifications.
+
+## Peer review rules
+
+- Each group assignment has a rubric, review deadline and 1–2 reviewers per submission.
+- The backend assigns reviewers with the lowest current allocation count and never assigns the author.
+- A reviewer can submit one review per allocation; duplicate/self-review is rejected.
+- All rubric criteria and scores are required. Feedback must contain at least 20 non-whitespace characters.
+- Repetitive feedback is marked `flagged` and does not earn leaderboard points until quality review.
+- Assignment and review deadlines are separate.
+
+## Leaderboard rules
+
+The season is the current UTC ISO week. Each completed group submission earns 10
+points and each accepted peer review earns 5 points. Points are capped at 100
+for submissions and 100 for reviews per season. Legacy Teacher-class work is
+excluded from both global and group rankings.
+
+The response includes `season_key`, `season_starts_at` and `season_ends_at` so
+the client can show the active season. Average received review score is shown
+as a quality metric but does not directly increase points.
+
+## Domain boundaries
+
+- `StudyGroup`, `StudyGroupMember`, `StudyGroupInvitation` and group assignments are the new primary domain.
+- `Classroom`, `ClassMember` and class assignments remain for Teacher Dashboard compatibility.
+- Legacy `/classes` endpoints filter out Study Groups.
+- Teacher Dashboard remains an optional management/moderation surface; learner mobile is the primary product experience.

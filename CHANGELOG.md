@@ -12,6 +12,10 @@ All notable changes to LearnMate AI are recorded here.
 
 ### Added
 
+- Separated Study Group tables from legacy Teacher classes; added pending invitations, deep links, notifications and 4–8 member limits.
+- Added rubric-based reviewer allocation, independent review deadlines, quality flags and UTC-week leaderboards with capped points.
+- Made Study Group the primary mobile navigation surface while preserving Teacher classes as compatibility.
+
 - Server-resumable learner onboarding for goal, daily study time, a versioned 20-question placement test and automatic learning-path creation.
 - Personalized Home dashboard that combines the learner's daily budget, next personal task and pending class assignments.
 - Dedicated teacher role, class invite codes, member rosters, deadline-based assignments, AI-assisted submissions and teacher feedback.

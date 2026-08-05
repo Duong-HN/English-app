@@ -17,21 +17,33 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    _future = widget.apiClient.teacherApplication();
+    _future = widget.apiClient.notifications();
   }
 
   Future<void> _refresh() async {
-    final next = widget.apiClient.teacherApplication();
+    final next = widget.apiClient.notifications();
     setState(() => _future = next);
     await next;
+  }
+
+  Future<void> _markAllRead() async {
+    await widget.apiClient.markAllNotificationsRead();
+    await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Thông báo'),
+        title: const Text('Notifications'),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: 'Mark all as read',
+            onPressed: _markAllRead,
+            icon: const Icon(Icons.done_all),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -41,7 +53,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [
+                children: const [
                   SizedBox(height: 220),
                   Center(child: CircularProgressIndicator()),
                 ],
@@ -54,64 +66,69 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 children: [
                   _NotificationNotice(
                     icon: Icons.cloud_off_outlined,
-                    title: 'Chưa thể tải thông báo',
+                    title: 'Could not load notifications',
                     message: snapshot.error.toString(),
                     isError: true,
                   ),
                 ],
               );
             }
-
-            final application =
-                snapshot.data?['application'] as Map<String, dynamic>?;
-            final status = application?['status']?.toString();
-            if (status == null) {
+            final items =
+                (snapshot.data?['items'] as List?)
+                    ?.whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
+                    .toList() ??
+                const <Map<String, dynamic>>[];
+            if (items.isEmpty) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.all(20),
-                children: [
+                padding: const EdgeInsets.all(20),
+                children: const [
                   SizedBox(height: 56),
                   _NotificationNotice(
                     icon: Icons.notifications_none_rounded,
-                    title: 'Bạn đã cập nhật',
+                    title: 'You are all caught up',
                     message:
-                        'Các thông báo mới về việc học sẽ xuất hiện tại đây.',
+                        'Group activity and learning reminders will appear here.',
                   ),
                 ],
               );
             }
-            final copy = switch (status) {
-              'pending' => (
-                'Hồ sơ đang chờ duyệt',
-                'Quản trị viên đang xem xét hồ sơ đăng ký giáo viên của bạn.',
-                Icons.schedule_outlined,
-                Colors.orange,
-              ),
-              'approved' => (
-                'Hồ sơ đã được duyệt',
-                'Bạn đã có quyền teacher. Hãy chuyển sang chế độ giáo viên trong Cài đặt khi cần.',
-                Icons.verified_outlined,
-                Colors.green,
-              ),
-              _ => (
-                'Hồ sơ cần bổ sung',
-                application?['review_note']?.toString() ??
-                    'Bạn có thể cập nhật và gửi lại hồ sơ.',
-                Icons.info_outline,
-                Colors.red,
-              ),
-            };
-            return ListView(
+            return ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(20),
-              children: [
-                _NotificationNotice(
-                  icon: copy.$3,
-                  title: copy.$1,
-                  message: copy.$2,
-                  color: copy.$4,
-                ),
-              ],
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final read = item['read_at'] != null;
+                return Card(
+                  color: read
+                      ? null
+                      : Theme.of(context).colorScheme.primaryContainer,
+                  child: ListTile(
+                    leading: Icon(
+                      read
+                          ? Icons.notifications_none_outlined
+                          : Icons.notifications_active_outlined,
+                    ),
+                    title: Text(item['title']?.toString() ?? 'Notification'),
+                    subtitle: Text(item['body']?.toString() ?? ''),
+                    trailing: read
+                        ? null
+                        : IconButton(
+                            tooltip: 'Mark as read',
+                            onPressed: () async {
+                              await widget.apiClient.markNotificationRead(
+                                item['id']?.toString() ?? '',
+                              );
+                              await _refresh();
+                            },
+                            icon: const Icon(Icons.done),
+                          ),
+                  ),
+                );
+              },
             );
           },
         ),
@@ -125,31 +142,27 @@ class _NotificationNotice extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
-    this.color,
     this.isError = false,
   });
 
   final IconData icon;
   final String title;
   final String message;
-  final Color? color;
   final bool isError;
 
   @override
   Widget build(BuildContext context) {
-    final resolvedColor =
-        color ??
-        (isError
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary);
+    final color = isError
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
     return Card(
-      color: resolvedColor.withValues(alpha: 0.08),
+      color: color.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: resolvedColor),
+            Icon(icon, color: color),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

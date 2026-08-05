@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api_client.dart';
 import '../../core/auth_controller.dart';
@@ -9,10 +10,12 @@ class StudyGroupsPage extends StatefulWidget {
     super.key,
     required this.apiClient,
     this.authController,
+    this.onOpenLegacyClasses,
   });
 
   final ApiClient apiClient;
   final AuthController? authController;
+  final Future<void> Function()? onOpenLegacyClasses;
 
   @override
   State<StudyGroupsPage> createState() => _StudyGroupsPageState();
@@ -23,6 +26,7 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
   final _descriptionController = TextEditingController();
   final _inviteController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _future;
+  late Future<List<Map<String, dynamic>>> _invitationsFuture;
   String _level = 'B1';
   bool _busy = false;
   String? _error;
@@ -30,7 +34,24 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
   @override
   void initState() {
     super.initState();
-    _future = widget.apiClient.studyGroups();
+    _future = _loadGroups();
+    _invitationsFuture = _loadInvitations();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadGroups() async {
+    try {
+      return await widget.apiClient.studyGroups();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadInvitations() async {
+    try {
+      return await widget.apiClient.studyGroupInvitations();
+    } catch (_) {
+      return const [];
+    }
   }
 
   @override
@@ -43,8 +64,18 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
 
   Future<void> _refresh() async {
     final next = widget.apiClient.studyGroups();
-    setState(() => _future = next);
-    await next;
+    final invitations = widget.apiClient.studyGroupInvitations();
+    setState(() {
+      _future = next;
+      _invitationsFuture = invitations;
+    });
+    await Future.wait([next, invitations]);
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _create() async {
@@ -236,6 +267,57 @@ class _StudyGroupsPageState extends State<StudyGroupsPage> {
               icon: const Icon(Icons.emoji_events_outlined),
               label: const Text('Bảng xếp hạng theo cấp độ'),
             ),
+            if (widget.onOpenLegacyClasses != null)
+              TextButton.icon(
+                key: const Key('open-legacy-classes'),
+                onPressed: widget.onOpenLegacyClasses,
+                icon: const Icon(Icons.school_outlined),
+                label: const Text('Teacher classes (compatibility)'),
+              ),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _invitationsFuture,
+              builder: (context, snapshot) {
+                final invitations = snapshot.data ?? const [];
+                if (invitations.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Pending group requests',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    ...invitations.map(
+                      (invitation) => Card(
+                        child: ListTile(
+                          title: Text(
+                            invitation['group_name']?.toString() ??
+                                'Study group',
+                          ),
+                          subtitle: Text(
+                            '${invitation['invitee_name'] ?? 'Learner'} · ${invitation['kind'] ?? 'request'}',
+                          ),
+                          trailing: FilledButton.tonal(
+                            onPressed: () async {
+                              try {
+                                await widget.apiClient
+                                    .approveStudyGroupInvitation(
+                                      invitation['id']?.toString() ?? '',
+                                    );
+                                await _refresh();
+                              } on ApiException catch (exception) {
+                                if (mounted) _showMessage(exception.message);
+                              }
+                            },
+                            child: const Text('Approve'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 8),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: _future,
@@ -333,6 +415,7 @@ class _StudyGroupDetailPageState extends State<StudyGroupDetailPage> {
         content: input.content,
         estimatedMinutes: input.estimatedMinutes,
         dueAt: input.dueAt,
+        reviewDeadline: input.reviewDeadline,
       );
       await _refresh();
       if (mounted) {
@@ -357,6 +440,7 @@ class _StudyGroupDetailPageState extends State<StudyGroupDetailPage> {
   Widget build(BuildContext context) {
     final name = widget.group['name']?.toString() ?? 'Nhóm học tập';
     final code = widget.group['invite_code']?.toString();
+    final inviteLink = widget.group['invite_link']?.toString();
     return Scaffold(
       appBar: AppBar(
         title: Text(name),
@@ -392,6 +476,26 @@ class _StudyGroupDetailPageState extends State<StudyGroupDetailPage> {
                 ),
               ),
             ),
+            if (inviteLink != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.link),
+                  title: const Text('Share this group'),
+                  subtitle: Text(
+                    inviteLink,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Copy invite link',
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: inviteLink));
+                      if (mounted) _showMessage('Invite link copied.');
+                    },
+                    icon: const Icon(Icons.copy_outlined),
+                  ),
+                ),
+              ),
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const Key('create-group-assignment'),
@@ -608,8 +712,35 @@ class _PeerReviewCard extends StatefulWidget {
 
 class _PeerReviewCardState extends State<_PeerReviewCard> {
   final _feedbackController = TextEditingController();
-  double _score = 7;
+  late final Map<String, double> _rubricScores;
+  late final Map<String, double> _rubricMax;
   bool _busy = false;
+
+  double get _score {
+    if (_rubricScores.isEmpty) return 0;
+    var total = 0.0;
+    for (final entry in _rubricScores.entries) {
+      total += entry.value / (_rubricMax[entry.key] ?? 5) * 10;
+    }
+    return total / _rubricScores.length;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final rubric =
+        (widget.target['rubric'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    _rubricScores = {for (final entry in rubric.entries) entry.key: 3};
+    _rubricMax = {
+      for (final entry in rubric.entries)
+        entry.key:
+            double.tryParse(
+              (entry.value as Map?)?['max_score']?.toString() ?? '5',
+            ) ??
+            5,
+    };
+  }
 
   @override
   void dispose() {
@@ -618,13 +749,15 @@ class _PeerReviewCardState extends State<_PeerReviewCard> {
   }
 
   Future<void> _submit() async {
-    if (_feedbackController.text.trim().length < 3) return;
+    if (_feedbackController.text.trim().length < 20 || _rubricScores.isEmpty) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       await widget.apiClient.createPeerReview(
         submissionId: widget.target['submission_id']?.toString() ?? '',
-        score: _score,
         feedback: _feedbackController.text,
+        rubricScores: _rubricScores,
       );
       await widget.onSubmitted();
     } on ApiException catch (exception) {
@@ -655,15 +788,23 @@ class _PeerReviewCardState extends State<_PeerReviewCard> {
             Text(widget.target['input_text']?.toString() ?? ''),
             const SizedBox(height: 10),
             Text('Điểm: ${_score.toStringAsFixed(1)}/10'),
-            Slider(
-              value: _score,
-              min: 0,
-              max: 10,
-              divisions: 20,
-              label: _score.toStringAsFixed(1),
-              onChanged: _busy
-                  ? null
-                  : (value) => setState(() => _score = value),
+            ..._rubricScores.keys.map(
+              (key) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('$key: ${_rubricScores[key]!.toStringAsFixed(1)}'),
+                  Slider(
+                    value: _rubricScores[key]!,
+                    min: 0,
+                    max: _rubricMax[key] ?? 5,
+                    divisions: 10,
+                    label: _rubricScores[key]!.toStringAsFixed(1),
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _rubricScores[key] = value),
+                  ),
+                ],
+              ),
             ),
             TextField(
               controller: _feedbackController,
@@ -804,6 +945,7 @@ class _AssignmentDraft {
     required this.content,
     required this.estimatedMinutes,
     required this.dueAt,
+    required this.reviewDeadline,
   });
 
   final String title;
@@ -811,6 +953,7 @@ class _AssignmentDraft {
   final String content;
   final int estimatedMinutes;
   final DateTime dueAt;
+  final DateTime reviewDeadline;
 }
 
 class _AssignmentDialog extends StatefulWidget {
@@ -824,6 +967,8 @@ class _AssignmentDialogState extends State<_AssignmentDialog> {
   final _title = TextEditingController();
   final _content = TextEditingController();
   String _skill = 'writing';
+  DateTime _dueAt = DateTime.now().add(const Duration(days: 2));
+  DateTime _reviewDeadline = DateTime.now().add(const Duration(days: 4));
 
   @override
   void dispose() {
@@ -842,9 +987,36 @@ class _AssignmentDialogState extends State<_AssignmentDialog> {
         skill: _skill,
         content: _content.text.trim(),
         estimatedMinutes: 20,
-        dueAt: DateTime.now().add(const Duration(days: 2)),
+        dueAt: _dueAt,
+        reviewDeadline: _reviewDeadline,
       ),
     );
+  }
+
+  Future<void> _pickDate({required bool review}) async {
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+      initialDate: review ? _reviewDeadline : _dueAt,
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      if (review) {
+        _reviewDeadline = DateTime(
+          selected.year,
+          selected.month,
+          selected.day,
+          23,
+          59,
+        );
+      } else {
+        _dueAt = DateTime(selected.year, selected.month, selected.day, 23, 59);
+        if (_reviewDeadline.isBefore(_dueAt)) {
+          _reviewDeadline = _dueAt.add(const Duration(days: 1));
+        }
+      }
+    });
   }
 
   @override
@@ -878,6 +1050,22 @@ class _AssignmentDialogState extends State<_AssignmentDialog> {
                   .toList(),
               onChanged: (value) => setState(() => _skill = value ?? 'writing'),
             ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_outlined),
+              title: const Text('Assignment deadline'),
+              subtitle: Text(_dueAt.toLocal().toString().split(' ').first),
+              onTap: () => _pickDate(review: false),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.rate_review_outlined),
+              title: const Text('Peer review deadline'),
+              subtitle: Text(
+                _reviewDeadline.toLocal().toString().split(' ').first,
+              ),
+              onTap: () => _pickDate(review: true),
+            ),
           ],
         ),
       ),
@@ -910,6 +1098,105 @@ class _GroupNotice extends StatelessWidget {
               TextButton(onPressed: onRetry, child: const Text('Tải lại')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class StudyGroupInvitePage extends StatefulWidget {
+  const StudyGroupInvitePage({
+    super.key,
+    required this.apiClient,
+    required this.token,
+    required this.onCompleted,
+  });
+
+  final ApiClient apiClient;
+  final String token;
+  final VoidCallback onCompleted;
+
+  @override
+  State<StudyGroupInvitePage> createState() => _StudyGroupInvitePageState();
+}
+
+class _StudyGroupInvitePageState extends State<StudyGroupInvitePage> {
+  late Future<Map<String, dynamic>> _future;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.apiClient.studyGroupInvitePreview(widget.token);
+  }
+
+  Future<void> _join() async {
+    setState(() => _busy = true);
+    try {
+      await widget.apiClient.joinStudyGroup('', inviteToken: widget.token);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Join request sent to the group owner.'),
+          ),
+        );
+        widget.onCompleted();
+      }
+    } on ApiException catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(exception.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Join a study group')),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text(_errorText(snapshot.error)));
+          }
+          final group = snapshot.data ?? const <String, dynamic>{};
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Icon(Icons.groups_rounded, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                group['group_name']?.toString() ?? 'Study group',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${group['member_count'] ?? 0}/${group['member_limit'] ?? 8} members',
+                textAlign: TextAlign.center,
+              ),
+              if (group['description'] != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  group['description'].toString(),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _busy ? null : _join,
+                icon: const Icon(Icons.login),
+                label: Text(_busy ? 'Sending...' : 'Request to join'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

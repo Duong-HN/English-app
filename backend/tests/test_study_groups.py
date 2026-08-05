@@ -42,6 +42,7 @@ def test_users_create_group_collaborate_peer_review_and_rank(client, db_session)
     assert group["is_owner"] is True
     assert group["member_count"] == 1
     assert group["invite_code"]
+    assert group["invite_link"].startswith("learnmate://study-groups/join?token=")
 
     joined = client.post(
         "/api/v1/study-groups/join",
@@ -49,7 +50,29 @@ def test_users_create_group_collaborate_peer_review_and_rank(client, db_session)
         json={"invite_code": group["invite_code"].lower()},
     )
     assert joined.status_code == 200, joined.text
-    assert joined.json()["member_count"] == 2
+    assert joined.json()["status"] == "pending"
+    invitation_id = joined.json()["invitation"]["id"]
+
+    notifications = client.get(
+        "/api/v1/notifications",
+        headers=auth(owner["access_token"]),
+    )
+    assert notifications.status_code == 200, notifications.text
+    assert notifications.json()["unread_count"] == 1
+
+    pending = client.get(
+        "/api/v1/study-groups/invitations",
+        headers=auth(owner["access_token"]),
+    )
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["total"] == 1
+
+    approved = client.post(
+        f"/api/v1/study-groups/invitations/{invitation_id}/approve",
+        headers=auth(owner["access_token"]),
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["member_count"] == 2
 
     assignment = client.post(
         f"/api/v1/study-groups/{group['id']}/assignments",
@@ -60,6 +83,7 @@ def test_users_create_group_collaborate_peer_review_and_rank(client, db_session)
             "content": "Write a short paragraph.",
             "estimated_minutes": 20,
             "due_at": deadline(),
+            "review_deadline": (datetime.now(UTC) + timedelta(days=4)).isoformat(),
         },
     )
     assert assignment.status_code == 201, assignment.text
@@ -84,10 +108,18 @@ def test_users_create_group_collaborate_peer_review_and_rank(client, db_session)
     review = client.post(
         f"/api/v1/submissions/{submission_id}/peer-reviews",
         headers=auth(owner["access_token"]),
-        json={"score": 8.5, "feedback": "Clear idea and good supporting detail."},
+        json={
+            "rubric_scores": {
+                "content": 4.5,
+                "clarity": 4.5,
+                "grammar": 4.5,
+                "vocabulary": 4.5,
+            },
+            "feedback": "Clear idea and good supporting detail with a useful example.",
+        },
     )
     assert review.status_code == 201, review.text
-    assert review.json()["score"] == 8.5
+    assert review.json()["score"] == 9.0
 
     reviews = client.get(
         f"/api/v1/submissions/{submission_id}/peer-reviews",

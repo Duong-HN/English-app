@@ -7,6 +7,7 @@ import '../../core/ocr_service.dart';
 import '../../core/speech_service.dart';
 import '../classes/classes_page.dart';
 import '../content/curriculum_page.dart';
+import '../groups/study_groups_page.dart';
 import '../settings/notifications_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/learnmate_top_bar.dart';
@@ -55,7 +56,7 @@ class _HomePageState extends State<HomePage> {
             widget.authController.user?['display_name']?.toString() ?? 'bạn',
         onOpenLearningPath: _openLearningPath,
         onOpenCurriculum: _openCurriculum,
-        onOpenClasses: () => _selectPage(2),
+        onOpenClasses: _openLegacyClasses,
         onOpenStudy: _openStudyTask,
       ),
       _StudyPage(
@@ -64,10 +65,10 @@ class _HomePageState extends State<HomePage> {
         ocrService: _ocrService,
         speechService: _speechService,
       ),
-      ClassesPage(
-        key: _classesKey,
+      StudyGroupsPage(
         apiClient: widget.apiClient,
         authController: widget.authController,
+        onOpenLegacyClasses: _openLegacyClasses,
       ),
       _HistoryPage(key: _historyKey, apiClient: widget.apiClient),
       _ProfilePage(authController: widget.authController),
@@ -84,6 +85,18 @@ class _HomePageState extends State<HomePage> {
   void _openStudyTask(Map<String, dynamic>? task) {
     _studyKey.currentState?.setTaskContext(task);
     setState(() => _selectedIndex = 1);
+  }
+
+  Future<void> _openLegacyClasses() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ClassesPage(
+          key: _classesKey,
+          apiClient: widget.apiClient,
+          authController: widget.authController,
+        ),
+      ),
+    );
   }
 
   Future<void> _openLearningPath() async {
@@ -120,7 +133,6 @@ class _HomePageState extends State<HomePage> {
     );
     if (mounted) {
       _dashboardKey.currentState?.refresh();
-      _classesKey.currentState?.refresh();
       setState(() {});
     }
   }
@@ -135,7 +147,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['Tổng quan', 'Học tập', 'Lớp học', 'Lịch sử', 'Hồ sơ'];
+    const titles = ['Tổng quan', 'Học tập', 'Nhóm học tập', 'Lịch sử', 'Hồ sơ'];
     return Scaffold(
       appBar: LearnMateTopBar(
         authController: widget.authController,
@@ -184,7 +196,7 @@ class _HomePageState extends State<HomePage> {
                 NavigationDestination(
                   icon: Icon(Icons.groups_outlined),
                   selectedIcon: Icon(Icons.groups_rounded),
-                  label: 'Lớp',
+                  label: 'Nhóm',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.history_outlined),

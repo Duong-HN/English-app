@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 
 import 'core/api_client.dart';
@@ -6,6 +9,7 @@ import 'core/token_store.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
 import 'features/onboarding/onboarding_page.dart';
+import 'features/groups/study_groups_page.dart';
 import 'features/teacher/teacher_mode_page.dart';
 
 class LearnMateApp extends StatefulWidget {
@@ -20,6 +24,9 @@ class LearnMateApp extends StatefulWidget {
 
 class _LearnMateAppState extends State<LearnMateApp> {
   late final AuthController _authController;
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _deepLinkSubscription;
+  String? _pendingInviteToken;
 
   @override
   void initState() {
@@ -28,11 +35,27 @@ class _LearnMateAppState extends State<LearnMateApp> {
       apiClient: widget.apiClient ?? ApiClient(),
       tokenStore: widget.tokenStore ?? const SecureTokenStore(),
     );
+    _appLinks = AppLinks();
+    _deepLinkSubscription = _appLinks.uriLinkStream.listen(_handleDeepLink);
+    _appLinks.getInitialLink().then(_handleDeepLink);
     _authController.initialize();
+  }
+
+  void _handleDeepLink(Uri? uri) {
+    if (uri == null ||
+        uri.scheme != 'learnmate' ||
+        uri.host != 'study-groups') {
+      return;
+    }
+    if (uri.path != '/join') return;
+    final token = uri.queryParameters['token'];
+    if (token == null || token.isEmpty || !mounted) return;
+    setState(() => _pendingInviteToken = token);
   }
 
   @override
   void dispose() {
+    _deepLinkSubscription?.cancel();
     _authController.dispose();
     super.dispose();
   }
@@ -74,7 +97,11 @@ class _LearnMateAppState extends State<LearnMateApp> {
               role != 'teacher') {
             return _NonLearnerPage(role: role, authController: _authController);
           }
-          return _LearnerEntry(authController: _authController);
+          return _LearnerEntry(
+            authController: _authController,
+            initialInviteToken: _pendingInviteToken,
+            onInviteHandled: () => setState(() => _pendingInviteToken = null),
+          );
         },
       ),
     );
@@ -82,9 +109,15 @@ class _LearnMateAppState extends State<LearnMateApp> {
 }
 
 class _LearnerEntry extends StatefulWidget {
-  const _LearnerEntry({required this.authController});
+  const _LearnerEntry({
+    required this.authController,
+    this.initialInviteToken,
+    this.onInviteHandled,
+  });
 
   final AuthController authController;
+  final String? initialInviteToken;
+  final VoidCallback? onInviteHandled;
 
   @override
   State<_LearnerEntry> createState() => _LearnerEntryState();
@@ -92,10 +125,36 @@ class _LearnerEntry extends StatefulWidget {
 
 class _LearnerEntryState extends State<_LearnerEntry> {
   bool _onboardingCompleted = false;
+  bool _showInvite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _showInvite = widget.initialInviteToken != null;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LearnerEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialInviteToken == null &&
+        widget.initialInviteToken != null) {
+      setState(() => _showInvite = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     if (_onboardingCompleted) {
+      if (_showInvite && widget.initialInviteToken != null) {
+        return StudyGroupInvitePage(
+          apiClient: widget.authController.apiClient,
+          token: widget.initialInviteToken!,
+          onCompleted: () {
+            setState(() => _showInvite = false);
+            widget.onInviteHandled?.call();
+          },
+        );
+      }
       return HomePage(
         apiClient: widget.authController.apiClient,
         authController: widget.authController,

@@ -507,6 +507,7 @@ class StudyGroupCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
     level: LearningLevel | None = None
+    member_limit: int = Field(default=8, ge=4, le=8)
 
     @field_validator("name", "description")
     @classmethod
@@ -520,7 +521,14 @@ class StudyGroupCreateRequest(BaseModel):
 
 
 class StudyGroupJoinRequest(BaseModel):
-    invite_code: str = Field(min_length=6, max_length=24)
+    invite_code: str | None = Field(default=None, min_length=6, max_length=24)
+    invite_token: str | None = Field(default=None, min_length=6, max_length=64)
+
+    @model_validator(mode="after")
+    def require_join_token(self):
+        if not self.invite_code and not self.invite_token:
+            raise ValueError("invite_code or invite_token is required")
+        return self
 
     @field_validator("invite_code")
     @classmethod
@@ -536,8 +544,11 @@ class StudyGroupResponse(BaseModel):
     description: str | None
     level: LearningLevel | None
     invite_code: str | None
+    invite_link: str | None
+    member_limit: int
     member_count: int
     is_owner: bool
+    pending_invitation_count: int = 0
     created_at: datetime
     updated_at: datetime | None
 
@@ -562,6 +573,44 @@ class StudyGroupMemberListResponse(BaseModel):
     total: int
 
 
+class StudyGroupInvitationResponse(BaseModel):
+    id: str
+    group_id: str
+    group_name: str
+    inviter_id: str
+    inviter_name: str
+    invitee_id: str
+    invitee_name: str
+    kind: Literal["invite", "join_request"]
+    status: Literal["pending", "accepted", "declined", "expired", "revoked"]
+    token: str | None
+    invite_link: str | None
+    expires_at: datetime
+    created_at: datetime
+    responded_at: datetime | None
+
+
+class StudyGroupInvitationListResponse(BaseModel):
+    items: list[StudyGroupInvitationResponse]
+    total: int
+
+
+class StudyGroupJoinResponse(BaseModel):
+    status: Literal["pending", "accepted", "already_member"]
+    group: StudyGroupResponse
+    invitation: StudyGroupInvitationResponse | None = None
+
+
+class StudyGroupInvitePreviewResponse(BaseModel):
+    group_id: str
+    group_name: str
+    description: str | None
+    level: LearningLevel | None
+    member_count: int
+    member_limit: int
+    expires_at: datetime | None
+
+
 class StudyGroupAssignmentResponse(BaseModel):
     id: str
     group_id: str
@@ -573,6 +622,9 @@ class StudyGroupAssignmentResponse(BaseModel):
     content: str
     estimated_minutes: int
     due_at: datetime
+    review_deadline: datetime
+    reviewers_per_submission: int
+    rubric: dict
     created_at: datetime
     updated_at: datetime | None
     submission_id: str | None = None
@@ -586,16 +638,24 @@ class StudyGroupAssignmentListResponse(BaseModel):
 
 
 class PeerReviewCreateRequest(BaseModel):
-    score: float = Field(ge=0, le=10)
-    feedback: str = Field(min_length=3, max_length=4000)
+    score: float | None = Field(default=None, ge=0, le=10)
+    rubric_scores: dict[str, float] = Field(default_factory=dict)
+    feedback: str = Field(min_length=20, max_length=4000)
 
     @field_validator("feedback")
     @classmethod
     def clean_peer_feedback(cls, value: str) -> str:
         cleaned = " ".join(value.split())
-        if len(cleaned) < 3:
-            raise ValueError("feedback must contain at least 3 non-whitespace characters")
+        if len(cleaned) < 20:
+            raise ValueError("feedback must contain at least 20 non-whitespace characters")
         return cleaned
+
+    @field_validator("rubric_scores")
+    @classmethod
+    def validate_rubric_scores(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(score < 0 or score > 10 for score in value.values()):
+            raise ValueError("rubric scores must be between 0 and 10")
+        return value
 
 
 class PeerReviewResponse(BaseModel):
@@ -603,8 +663,12 @@ class PeerReviewResponse(BaseModel):
     submission_id: str
     reviewer_id: str
     reviewer_name: str
+    allocation_id: str | None
     score: float
     feedback: str
+    rubric_scores: dict[str, float]
+    quality_status: str
+    review_deadline: datetime | None
     created_at: datetime
     updated_at: datetime | None
 
@@ -618,6 +682,9 @@ class PeerReviewTargetResponse(BaseModel):
     input_text: str
     analysis: AnalysisResponse | None
     submitted_at: datetime
+    allocation_id: str
+    review_deadline: datetime
+    rubric: dict
 
 
 class PeerReviewQueueResponse(BaseModel):
@@ -638,7 +705,27 @@ class LeaderboardEntryResponse(BaseModel):
 
 class LeaderboardResponse(BaseModel):
     level: LearningLevel | None
+    season_key: str
+    season_label: str
+    season_starts_at: datetime
+    season_ends_at: datetime
     items: list[LeaderboardEntryResponse]
+    total: int
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    kind: str
+    title: str
+    body: str
+    data: dict
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationResponse]
+    unread_count: int
     total: int
 
 
@@ -662,6 +749,9 @@ class AssignmentCreateRequest(BaseModel):
     content: str = Field(min_length=3, max_length=10000)
     estimated_minutes: int = Field(ge=5, le=120)
     due_at: datetime
+    review_deadline: datetime | None = None
+    reviewers_per_submission: int = Field(default=1, ge=1, le=2)
+    rubric: dict[str, dict] | None = None
 
     @field_validator("title", "content")
     @classmethod
@@ -678,6 +768,17 @@ class AssignmentCreateRequest(BaseModel):
             raise ValueError("due_at must include a timezone")
         if value.astimezone(UTC) <= datetime.now(UTC):
             raise ValueError("due_at must be in the future")
+        return value
+
+    @field_validator("review_deadline")
+    @classmethod
+    def require_future_review_deadline(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("review_deadline must include a timezone")
+        if value.astimezone(UTC) <= datetime.now(UTC):
+            raise ValueError("review_deadline must be in the future")
         return value
 
 

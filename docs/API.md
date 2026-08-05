@@ -205,9 +205,10 @@ duplicate work. AI output is nested under `analysis`; feedback is submitted as `
 ## Collaborative study groups
 
 Study groups are the primary peer-learning actor model. Both `learner` and `teacher` accounts can create or join a group;
-the legacy teacher class endpoints remain available for backwards compatibility. See [Study groups](STUDY_GROUPS.md) for the
-full flow. The group APIs support invite codes, member-created assignments, peer-review queues, one review per reviewer per
-submission and leaderboards filtered by `A1`, `A2`, `B1`, `B2` or `C1`.
+the legacy teacher class endpoints remain available only for compatibility. See [Study groups](STUDY_GROUPS.md) for the
+full flow. Study Group uses separate tables, pending join requests, custom-scheme invite links, 4–8 member limits,
+rubric-based reviewer allocations, independent review deadlines, quality flags and UTC-week seasons with capped points.
+Legacy `Classroom` assignments are excluded from the Study Group leaderboard.
 
 ## Learner home
 

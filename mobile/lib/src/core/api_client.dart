@@ -372,6 +372,18 @@ class ApiClient {
     return _get('/api/v1/teacher-applications/me');
   }
 
+  Future<Map<String, dynamic>> notifications() {
+    return _get('/api/v1/notifications');
+  }
+
+  Future<Map<String, dynamic>> markNotificationRead(String notificationId) {
+    return _post('/api/v1/notifications/$notificationId/read', body: const {});
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _post('/api/v1/notifications/read-all', body: const {});
+  }
+
   Future<Map<String, dynamic>> submitTeacherApplication({
     required String motivation,
     String? organization,
@@ -431,6 +443,7 @@ class ApiClient {
     required String name,
     String? description,
     String? level,
+    int memberLimit = 8,
   }) {
     return _post(
       '/api/v1/study-groups',
@@ -440,14 +453,54 @@ class ApiClient {
             ? null
             : {'description': description.trim()}),
         ...?(level == null || level.trim().isEmpty ? null : {'level': level}),
+        'member_limit': memberLimit,
       },
     );
   }
 
-  Future<Map<String, dynamic>> joinStudyGroup(String inviteCode) {
+  Future<Map<String, dynamic>> joinStudyGroup(
+    String inviteCode, {
+    String? inviteToken,
+  }) {
     return _post(
       '/api/v1/study-groups/join',
-      body: {'invite_code': inviteCode.trim()},
+      body: {
+        ...?(inviteCode.trim().isEmpty
+            ? null
+            : {'invite_code': inviteCode.trim()}),
+        ...?(inviteToken == null || inviteToken.trim().isEmpty
+            ? null
+            : {'invite_token': inviteToken.trim()}),
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> studyGroupInvitePreview(String token) {
+    return _get(
+      '/api/v1/study-groups/invite-preview/${Uri.encodeComponent(token)}',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> studyGroupInvitations() async {
+    final payload = await _get('/api/v1/study-groups/invitations');
+    return _mapItems(payload, const ['items', 'data']);
+  }
+
+  Future<Map<String, dynamic>> approveStudyGroupInvitation(
+    String invitationId,
+  ) {
+    return _post(
+      '/api/v1/study-groups/invitations/$invitationId/approve',
+      body: const {},
+    );
+  }
+
+  Future<Map<String, dynamic>> declineStudyGroupInvitation(
+    String invitationId,
+  ) {
+    return _post(
+      '/api/v1/study-groups/invitations/$invitationId/decline',
+      body: const {},
     );
   }
 
@@ -465,6 +518,9 @@ class ApiClient {
     required String content,
     required int estimatedMinutes,
     required DateTime dueAt,
+    DateTime? reviewDeadline,
+    int reviewersPerSubmission = 1,
+    Map<String, dynamic>? rubric,
   }) {
     return _post(
       '/api/v1/study-groups/$groupId/assignments',
@@ -474,6 +530,13 @@ class ApiClient {
         'content': content.trim(),
         'estimated_minutes': estimatedMinutes,
         'due_at': dueAt.toUtc().toIso8601String(),
+        ...?(reviewDeadline == null
+            ? null
+            : {'review_deadline': reviewDeadline.toUtc().toIso8601String()}),
+        ...?(reviewersPerSubmission == 1
+            ? null
+            : {'reviewers_per_submission': reviewersPerSubmission}),
+        ...?(rubric == null ? null : {'rubric': rubric}),
       },
     );
   }
@@ -490,12 +553,17 @@ class ApiClient {
 
   Future<Map<String, dynamic>> createPeerReview({
     required String submissionId,
-    required double score,
+    double? score,
     required String feedback,
+    Map<String, double>? rubricScores,
   }) {
     return _post(
       '/api/v1/submissions/$submissionId/peer-reviews',
-      body: {'score': score, 'feedback': feedback.trim()},
+      body: {
+        ...?(score == null ? null : {'score': score}),
+        'feedback': feedback.trim(),
+        ...?(rubricScores == null ? null : {'rubric_scores': rubricScores}),
+      },
     );
   }
 

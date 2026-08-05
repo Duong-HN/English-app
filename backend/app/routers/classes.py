@@ -15,7 +15,7 @@ from ..dependencies import (
     require_teacher,
     require_teacher_or_admin,
 )
-from ..learning_spaces import ensure_class_space
+from ..learning_spaces import ensure_class_space, ensure_self_space
 from ..models import (
     Analysis,
     Assignment,
@@ -23,6 +23,7 @@ from ..models import (
     ClassMember,
     Classroom,
     LearningSpace,
+    StudyGroupMember,
     User,
     utc_now,
 )
@@ -42,6 +43,7 @@ from ..schemas import (
     ClassResponse,
     SubmissionFeedbackUpdate,
 )
+from ..study_group_service import allocate_peer_reviews
 from .vocabulary import upsert_analysis_vocabulary
 
 router = APIRouter(tags=["classes and assignments"])
@@ -98,7 +100,12 @@ def _class_response(
 
 
 def _get_class(db: Session, class_id: str) -> Classroom:
-    classroom = db.get(Classroom, class_id)
+    classroom = db.scalar(
+        select(Classroom).where(
+            Classroom.id == class_id,
+            Classroom.is_study_group.is_(False),
+        )
+    )
     if classroom is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
     return classroom
@@ -190,7 +197,11 @@ def list_classes(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    statement = select(Classroom, User).join(User, User.id == Classroom.teacher_id)
+    statement = (
+        select(Classroom, User)
+        .join(User, User.id == Classroom.teacher_id)
+        .where(Classroom.is_study_group.is_(False))
+    )
     if user.role == "teacher":
         statement = (
             statement.outerjoin(ClassMember, ClassMember.class_id == Classroom.id)
@@ -217,7 +228,12 @@ def join_class(
     db: Session = Depends(get_db),
     learner: User = Depends(require_learner),
 ):
-    classroom = db.scalar(select(Classroom).where(Classroom.invite_code == request.invite_code))
+    classroom = db.scalar(
+        select(Classroom).where(
+            Classroom.invite_code == request.invite_code,
+            Classroom.is_study_group.is_(False),
+        )
+    )
     if classroom is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite code is invalid")
     membership = db.scalar(
@@ -365,15 +381,32 @@ async def submit_assignment(
     assignment = db.get(Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    membership = db.scalar(
-        select(ClassMember.id).where(
-            ClassMember.class_id == assignment.class_id,
-            ClassMember.learner_id == learner.id,
+    if assignment.study_group_id is not None:
+        membership = db.scalar(
+            select(StudyGroupMember.id).where(
+                StudyGroupMember.group_id == assignment.study_group_id,
+                StudyGroupMember.user_id == learner.id,
+                StudyGroupMember.status == "active",
+            )
         )
-    )
-    if membership is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    learner_space = ensure_class_space(db, learner, db.get(Classroom, assignment.class_id))
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        learner_space = ensure_self_space(db, learner)
+    else:
+        if assignment.class_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        membership = db.scalar(
+            select(ClassMember.id).where(
+                ClassMember.class_id == assignment.class_id,
+                ClassMember.learner_id == learner.id,
+            )
+        )
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        classroom = db.get(Classroom, assignment.class_id)
+        if classroom is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        learner_space = ensure_class_space(db, learner, classroom)
     if utc_now() > _as_utc(assignment.due_at):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assignment deadline has passed")
 
@@ -429,6 +462,9 @@ async def submit_assignment(
         submission.feedback_at = None
         submission.submitted_at = now
         submission.updated_at = now
+    db.flush()
+    if assignment.study_group_id is not None:
+        allocate_peer_reviews(db, assignment, submission)
     db.commit()
     db.refresh(submission)
     db.refresh(analysis)
@@ -447,15 +483,32 @@ def get_own_submission(
     assignment = db.get(Assignment, assignment_id)
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    membership = db.scalar(
-        select(ClassMember.id).where(
-            ClassMember.class_id == assignment.class_id,
-            ClassMember.learner_id == learner.id,
+    if assignment.study_group_id is not None:
+        membership = db.scalar(
+            select(StudyGroupMember.id).where(
+                StudyGroupMember.group_id == assignment.study_group_id,
+                StudyGroupMember.user_id == learner.id,
+                StudyGroupMember.status == "active",
+            )
         )
-    )
-    if membership is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    ensure_class_space(db, learner, db.get(Classroom, assignment.class_id))
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        ensure_self_space(db, learner)
+    else:
+        if assignment.class_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        membership = db.scalar(
+            select(ClassMember.id).where(
+                ClassMember.class_id == assignment.class_id,
+                ClassMember.learner_id == learner.id,
+            )
+        )
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        classroom = db.get(Classroom, assignment.class_id)
+        if classroom is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+        ensure_class_space(db, learner, classroom)
     submission = db.scalar(
         select(AssignmentSubmission).where(
             AssignmentSubmission.assignment_id == assignment.id,
@@ -479,6 +532,8 @@ def list_submissions(
 ):
     assignment = db.get(Assignment, assignment_id)
     if assignment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    if assignment.class_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     _require_class_owner(db, assignment.class_id, user)
     rows = db.execute(
@@ -508,6 +563,11 @@ def update_submission_feedback(
     if assignment is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Submission assignment is missing"
+        )
+    if assignment.class_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher feedback is unavailable for group work",
         )
     _require_class_owner(db, assignment.class_id, user)
     submission.teacher_feedback = request.feedback
