@@ -6,8 +6,14 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Notification, User, utc_now
-from ..schemas import NotificationListResponse, NotificationResponse
+from ..models import Notification, PushDevice, User, utc_now
+from ..schemas import (
+    NotificationListResponse,
+    NotificationResponse,
+    PushDeviceRegisterRequest,
+    PushDeviceResponse,
+    PushDeviceUnregisterRequest,
+)
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -25,6 +31,15 @@ def _response(notification: Notification) -> NotificationResponse:
         data=notification.data or {},
         read_at=_as_utc(notification.read_at) if notification.read_at else None,
         created_at=_as_utc(notification.created_at),
+    )
+
+
+def _device_response(device: PushDevice) -> PushDeviceResponse:
+    return PushDeviceResponse(
+        id=device.id,
+        platform=device.platform,
+        enabled=device.enabled,
+        last_seen_at=_as_utc(device.last_seen_at),
     )
 
 
@@ -53,6 +68,49 @@ def list_notifications(
         unread_count=unread_count,
         total=len(notifications),
     )
+
+
+@router.post("/devices", response_model=PushDeviceResponse)
+def register_push_device(
+    payload: PushDeviceRegisterRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Register or refresh one FCM token for the signed-in user."""
+
+    device = db.scalar(select(PushDevice).where(PushDevice.token == payload.token))
+    if device is None:
+        device = PushDevice(token=payload.token)
+        db.add(device)
+    # A token can only belong to one account. Re-registering after account
+    # switching moves it to the current user instead of leaking notifications.
+    device.user_id = user.id
+    device.platform = payload.platform
+    device.app_version = payload.app_version
+    device.enabled = True
+    device.last_seen_at = utc_now()
+    device.updated_at = utc_now()
+    db.commit()
+    db.refresh(device)
+    return _device_response(device)
+
+
+@router.post("/devices/unregister", status_code=status.HTTP_204_NO_CONTENT)
+def unregister_push_device(
+    payload: PushDeviceUnregisterRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    device = db.scalar(
+        select(PushDevice).where(
+            PushDevice.token == payload.token,
+            PushDevice.user_id == user.id,
+        )
+    )
+    if device is not None:
+        device.enabled = False
+        device.updated_at = utc_now()
+        db.commit()
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)

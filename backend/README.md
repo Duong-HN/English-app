@@ -75,3 +75,11 @@ python -m alembic revision --autogenerate -m "describe change"
 ```
 
 Production runs migrations before starting Uvicorn. `AUTO_CREATE_SCHEMA=true` exists only for tests and convenient local development.
+
+### Optional push notifications
+
+In-app notifications work without additional setup. To enable Firebase Cloud
+Messaging HTTP v1, configure `PUSH_PROVIDER=fcm`, `FCM_PROJECT_ID`, and either
+`FCM_SERVICE_ACCOUNT_FILE` or `FCM_SERVICE_ACCOUNT_JSON` through the deployment
+secret manager. The mobile build also needs the Firebase project files for its
+Android/iOS application; those files are intentionally not committed.

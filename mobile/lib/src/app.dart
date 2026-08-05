@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'core/api_client.dart';
 import 'core/auth_controller.dart';
+import 'core/push_notification_service.dart';
 import 'core/token_store.dart';
 import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
@@ -26,6 +27,10 @@ class _LearnMateAppState extends State<LearnMateApp> {
   late final AuthController _authController;
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _deepLinkSubscription;
+  late final PushNotificationService _pushNotificationService;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+  bool _pushStarted = false;
   String? _pendingInviteToken;
 
   @override
@@ -35,10 +40,32 @@ class _LearnMateAppState extends State<LearnMateApp> {
       apiClient: widget.apiClient ?? ApiClient(),
       tokenStore: widget.tokenStore ?? const SecureTokenStore(),
     );
+    _pushNotificationService = PushNotificationService(
+      onForegroundMessage: _showForegroundPush,
+    );
+    _authController.addListener(_handleAuthChanged);
     _appLinks = AppLinks();
     _deepLinkSubscription = _appLinks.uriLinkStream.listen(_handleDeepLink);
     _appLinks.getInitialLink().then(_handleDeepLink);
     _authController.initialize();
+  }
+
+  void _handleAuthChanged() {
+    if (!_authController.isAuthenticated || _pushStarted) return;
+    _pushStarted = true;
+    unawaited(_pushNotificationService.initialize(_authController.apiClient));
+  }
+
+  void _showForegroundPush(String title, String body) {
+    if (!mounted) return;
+    _scaffoldMessengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(body.isEmpty ? title : '$title\n$body'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
   }
 
   void _handleDeepLink(Uri? uri) {
@@ -56,6 +83,8 @@ class _LearnMateAppState extends State<LearnMateApp> {
   @override
   void dispose() {
     _deepLinkSubscription?.cancel();
+    _authController.removeListener(_handleAuthChanged);
+    unawaited(_pushNotificationService.dispose());
     _authController.dispose();
     super.dispose();
   }
@@ -65,6 +94,7 @@ class _LearnMateAppState extends State<LearnMateApp> {
     return MaterialApp(
       title: 'LearnMate AI',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2563EB),

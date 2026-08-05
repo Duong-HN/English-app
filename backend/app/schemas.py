@@ -729,6 +729,23 @@ class NotificationListResponse(BaseModel):
     total: int
 
 
+class PushDeviceRegisterRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+    platform: Literal["android", "ios", "web"]
+    app_version: str | None = Field(default=None, max_length=32)
+
+
+class PushDeviceUnregisterRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+
+
+class PushDeviceResponse(BaseModel):
+    id: str
+    platform: Literal["android", "ios", "web"]
+    enabled: bool
+    last_seen_at: datetime
+
+
 class ClassMemberResponse(BaseModel):
     id: str
     learner_id: str

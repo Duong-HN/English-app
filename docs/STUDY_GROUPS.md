@@ -39,6 +39,20 @@ The mobile app registers this custom scheme and opens a preview/approval flow.
 - `GET /api/v1/study-groups/{id}/leaderboard` — weekly group leaderboard.
 - `GET /api/v1/notifications` — group activity and review notifications.
 
+## Notification delivery
+
+In-app notifications are always persisted and are the source of truth. Mobile
+also requests FCM permission and registers its token when Firebase native
+configuration is present. The backend sends optional FCM HTTP v1 push messages
+when `PUSH_PROVIDER=fcm`; otherwise it records `push_status=skipped` and keeps
+the in-app flow working.
+
+Use `POST /api/v1/notifications/devices` to register the current FCM token and
+`POST /api/v1/notifications/devices/unregister` to disable it on account
+switch. For production, set `FCM_PROJECT_ID` and either
+`FCM_SERVICE_ACCOUNT_FILE` or the secret-managed `FCM_SERVICE_ACCOUNT_JSON`.
+Never commit Firebase service-account keys or native Firebase config files.
+
 ## Peer review rules
 
 - Each group assignment has a rubric, review deadline and 1–2 reviewers per submission.

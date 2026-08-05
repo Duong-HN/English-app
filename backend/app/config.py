@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_window_seconds: int = 60
 
+    # Push is deliberately opt-in. Local/test environments keep in-app
+    # notifications without making outbound requests.
+    push_provider: str = "none"
+    fcm_project_id: str | None = None
+    fcm_service_account_json: str | None = None
+    fcm_service_account_file: str | None = None
+    push_timeout_seconds: float = 5
+
     allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080"
     )
@@ -39,6 +47,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self):
+        if self.push_provider.lower() not in {"none", "fcm"}:
+            raise ValueError("PUSH_PROVIDER must be one of: none, fcm")
+        if self.push_provider.lower() == "fcm" and not self.fcm_project_id:
+            raise ValueError("FCM_PROJECT_ID is required when PUSH_PROVIDER=fcm")
+        if self.push_timeout_seconds <= 0:
+            raise ValueError("PUSH_TIMEOUT_SECONDS must be positive")
         if self.app_env.strip().lower() == "production":
             if self.jwt_secret == "development-only-change-me" or len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET must be a random value of at least 32 characters in production")
@@ -63,6 +77,12 @@ class Settings(BaseSettings):
                 raise ValueError("RATE_LIMIT_ENABLED must be true in production")
             if self.rate_limit_window_seconds < 1:
                 raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be positive")
+            if self.push_provider.lower() == "fcm" and not (
+                self.fcm_service_account_json or self.fcm_service_account_file
+            ):
+                raise ValueError(
+                    "FCM_SERVICE_ACCOUNT_JSON or FCM_SERVICE_ACCOUNT_FILE is required when PUSH_PROVIDER=fcm"
+                )
         return self
 
 

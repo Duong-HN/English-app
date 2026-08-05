@@ -95,6 +95,11 @@ class User(Base):
         cascade="all, delete-orphan",
         order_by="Notification.created_at.desc()",
     )
+    push_devices: Mapped[list[PushDevice]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="PushDevice.last_seen_at.desc()",
+    )
     admin_audit_logs: Mapped[list[AdminAuditLog]] = relationship(
         back_populates="admin_user",
         foreign_keys="AdminAuditLog.admin_user_id",
@@ -625,7 +630,25 @@ class Notification(Base):
     data: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    push_status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    push_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     user: Mapped[User] = relationship(back_populates="notifications")
+
+
+class PushDevice(Base):
+    __tablename__ = "push_devices"
+    __table_args__ = (UniqueConstraint("token", name="uq_push_device_token"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(String(4096))
+    platform: Mapped[str] = mapped_column(String(16), index=True)
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user: Mapped[User] = relationship(back_populates="push_devices")
 
 
 class LeaderboardSeason(Base):

@@ -375,6 +375,46 @@ void main() {
     );
   });
 
+  test(
+    'push device lifecycle uses the authenticated notification endpoints',
+    () async {
+      final requests = <http.Request>[];
+      final client = ApiClient(
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/unregister')) {
+            return http.Response('', 204);
+          }
+          return jsonResponse({
+            'id': 'device-1',
+            'platform': 'android',
+            'enabled': true,
+            'last_seen_at': '2026-08-06T00:00:00Z',
+          });
+        }),
+      )..accessToken = 'learner-token';
+
+      await client.registerPushDevice(
+        token: 'fcm-token-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        platform: 'android',
+        appVersion: '0.7.0',
+      );
+      await client.unregisterPushDevice(
+        'fcm-token-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      );
+
+      expect(requests[0].url.path, '/api/v1/notifications/devices');
+      expect(jsonDecode(requests[0].body), {
+        'token': 'fcm-token-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        'platform': 'android',
+        'app_version': '0.7.0',
+      });
+      expect(requests[1].url.path, '/api/v1/notifications/devices/unregister');
+      expect(requests[1].headers['Authorization'], 'Bearer learner-token');
+    },
+  );
+
   test('contextual analysis includes learning path and task day', () async {
     late http.Request capturedPost;
     final client = ApiClient(

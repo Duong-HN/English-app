@@ -210,6 +210,12 @@ full flow. Study Group uses separate tables, pending join requests, custom-schem
 rubric-based reviewer allocations, independent review deadlines, quality flags and UTC-week seasons with capped points.
 Legacy `Classroom` assignments are excluded from the Study Group leaderboard.
 
+Notifications are always persisted in-app. Mobile registers FCM tokens through
+`POST /api/v1/notifications/devices` and can disable them with
+`POST /api/v1/notifications/devices/unregister`. Push delivery is optional and
+uses FCM HTTP v1 only when the backend `PUSH_PROVIDER=fcm` configuration is
+present.
+
 ## Learner home
 
 - `GET /home` — returns the active self-study or class space.

@@ -14,6 +14,7 @@ from .models import (
     User,
     utc_now,
 )
+from .push_service import dispatch_push
 
 DEFAULT_RUBRIC = {
     "content": {"label": "Nội dung", "max_score": 5},
@@ -57,6 +58,10 @@ def add_notification(
         data=data or {},
     )
     db.add(notification)
+    # Flush gives the notification its id before a push payload is built. The
+    # delivery helper is best-effort and never raises into the user action.
+    db.flush()
+    dispatch_push(db, notification)
     return notification
 
 

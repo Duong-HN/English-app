@@ -376,6 +376,29 @@ class ApiClient {
     return _get('/api/v1/notifications');
   }
 
+  Future<Map<String, dynamic>> registerPushDevice({
+    required String token,
+    required String platform,
+    String? appVersion,
+  }) {
+    return _post(
+      '/api/v1/notifications/devices',
+      body: {
+        'token': token,
+        'platform': platform,
+        if (appVersion != null && appVersion.isNotEmpty)
+          'app_version': appVersion,
+      },
+    );
+  }
+
+  Future<void> unregisterPushDevice(String token) async {
+    await _post(
+      '/api/v1/notifications/devices/unregister',
+      body: {'token': token},
+    );
+  }
+
   Future<Map<String, dynamic>> markNotificationRead(String notificationId) {
     return _post('/api/v1/notifications/$notificationId/read', body: const {});
   }

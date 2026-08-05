@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app.models import Assignment, AssignmentSubmission, Classroom, User
+from app.models import Assignment, AssignmentSubmission, Classroom, PushDevice, User
 
 
 def register(client: TestClient, email: str, display_name: str) -> dict:
@@ -20,6 +20,39 @@ def auth(token: str) -> dict[str, str]:
 
 def deadline() -> str:
     return (datetime.now(UTC) + timedelta(days=2)).isoformat()
+
+
+def test_user_can_register_refresh_and_unregister_push_device(client, db_session):
+    account = register(client, "push-device@example.com", "Push Device User")
+    token = "fcm-token-" + ("x" * 40)
+
+    registered = client.post(
+        "/api/v1/notifications/devices",
+        headers=auth(account["access_token"]),
+        json={"token": token, "platform": "android", "app_version": "0.7.0"},
+    )
+    assert registered.status_code == 200, registered.text
+    assert registered.json()["platform"] == "android"
+    assert registered.json()["enabled"] is True
+
+    refreshed = client.post(
+        "/api/v1/notifications/devices",
+        headers=auth(account["access_token"]),
+        json={"token": token, "platform": "ios"},
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    device = db_session.query(PushDevice).filter_by(token=token).one()
+    assert device.platform == "ios"
+    assert device.app_version is None
+
+    unregistered = client.post(
+        "/api/v1/notifications/devices/unregister",
+        headers=auth(account["access_token"]),
+        json={"token": token},
+    )
+    assert unregistered.status_code == 204, unregistered.text
+    db_session.refresh(device)
+    assert device.enabled is False
 
 
 def test_users_create_group_collaborate_peer_review_and_rank(client, db_session):
