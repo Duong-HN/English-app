@@ -163,51 +163,57 @@ void main() {
     },
   );
 
-  test('learning path adaptation uses a job and polls to the updated path', () async {
-    final requests = <http.Request>[];
-    final statuses = <String>[];
-    final client = ApiClient(
-      baseUrl: 'https://api.example.test',
-      client: MockClient((request) async {
-        requests.add(request);
-        if (request.method == 'POST') {
-          expect(request.url.path, '/api/v1/learning-path-jobs/path-1/adapt');
-          expect(
-            request.headers['Idempotency-Key'],
-            startsWith('mobile-learning-path-adapt-path-1-'),
-          );
+  test(
+    'learning path adaptation uses a job and polls to the updated path',
+    () async {
+      final requests = <http.Request>[];
+      final statuses = <String>[];
+      final client = ApiClient(
+        baseUrl: 'https://api.example.test',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.method == 'POST') {
+            expect(request.url.path, '/api/v1/learning-path-jobs/path-1/adapt');
+            expect(
+              request.headers['Idempotency-Key'],
+              startsWith('mobile-learning-path-adapt-path-1-'),
+            );
+            return jsonResponse({
+              'id': 'adapt-job-1',
+              'operation': 'adapt',
+              'status': 'queued',
+              'learning_path_id': 'path-1',
+            }, 202);
+          }
+          if (request.url.path == '/api/v1/learning-path-jobs/adapt-job-1') {
+            return jsonResponse({
+              'id': 'adapt-job-1',
+              'operation': 'adapt',
+              'status': 'succeeded',
+              'learning_path_id': 'path-1',
+            }, 200);
+          }
           return jsonResponse({
-            'id': 'adapt-job-1',
-            'operation': 'adapt',
-            'status': 'queued',
-            'learning_path_id': 'path-1',
-          }, 202);
-        }
-        if (request.url.path == '/api/v1/learning-path-jobs/adapt-job-1') {
-          return jsonResponse({
-            'id': 'adapt-job-1',
-            'operation': 'adapt',
-            'status': 'succeeded',
-            'learning_path_id': 'path-1',
+            'id': 'path-1',
+            'plan': <String, dynamic>{},
           }, 200);
-        }
-        return jsonResponse({'id': 'path-1', 'plan': <String, dynamic>{}}, 200);
-      }),
-    )..accessToken = 'learner-token';
+        }),
+      )..accessToken = 'learner-token';
 
-    final response = await client.adaptLearningPath(
-      'path-1',
-      onStatus: statuses.add,
-    );
+      final response = await client.adaptLearningPath(
+        'path-1',
+        onStatus: statuses.add,
+      );
 
-    expect(requests.map((request) => request.url.path), [
-      '/api/v1/learning-path-jobs/path-1/adapt',
-      '/api/v1/learning-path-jobs/adapt-job-1',
-      '/api/v1/learning-paths/path-1',
-    ]);
-    expect(statuses, ['queued', 'succeeded']);
-    expect(response['id'], 'path-1');
-  });
+      expect(requests.map((request) => request.url.path), [
+        '/api/v1/learning-path-jobs/path-1/adapt',
+        '/api/v1/learning-path-jobs/adapt-job-1',
+        '/api/v1/learning-paths/path-1',
+      ]);
+      expect(statuses, ['queued', 'succeeded']);
+      expect(response['id'], 'path-1');
+    },
+  );
 
   test('onboarding preferences use the learner contract', () async {
     late http.Request captured;
@@ -299,6 +305,74 @@ void main() {
     expect(requests.last.url.path, '/api/v1/assignments/assignment-1/submit');
     expect(jsonDecode(requests.last.body), {'input_text': 'My answer'});
     expect(submission['status'], 'submitted');
+  });
+
+  test('study group APIs cover collaboration and peer review', () async {
+    final requests = <http.Request>[];
+    final client = ApiClient(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path == '/api/v1/study-groups') {
+          return jsonResponse({
+            'items': [
+              {'id': 'group-1', 'name': 'B1 Circle'},
+            ],
+          });
+        }
+        if (request.url.path == '/api/v1/study-groups/group-1/leaderboard') {
+          return jsonResponse({
+            'items': [
+              {'display_name': 'Learner', 'points': 15},
+            ],
+          });
+        }
+        if (request.method == 'GET') {
+          return jsonResponse({
+            'items': [
+              {'submission_id': 'submission-1', 'author_name': 'Friend'},
+            ],
+          });
+        }
+        return jsonResponse({'id': 'review-1', 'score': 8.5}, 201);
+      }),
+    )..accessToken = 'learner-token';
+
+    final groups = await client.studyGroups();
+    await client.createStudyGroupAssignment(
+      groupId: 'group-1',
+      title: 'Shared writing',
+      skill: 'writing',
+      content: 'Write a paragraph.',
+      estimatedMinutes: 20,
+      dueAt: DateTime.utc(2026, 8, 7),
+    );
+    final queue = await client.peerReviewQueue(
+      groupId: 'group-1',
+      assignmentId: 'assignment-1',
+    );
+    final review = await client.createPeerReview(
+      submissionId: 'submission-1',
+      score: 8.5,
+      feedback: 'Clear and useful.',
+    );
+    final leaderboard = await client.studyGroupLeaderboard('group-1');
+
+    expect(groups.single['name'], 'B1 Circle');
+    expect(queue.single['author_name'], 'Friend');
+    expect(review['score'], 8.5);
+    expect(leaderboard.single['points'], 15);
+    expect(jsonDecode(requests[1].body), {
+      'title': 'Shared writing',
+      'skill': 'writing',
+      'content': 'Write a paragraph.',
+      'estimated_minutes': 20,
+      'due_at': '2026-08-07T00:00:00.000Z',
+    });
+    expect(
+      requests[3].url.path,
+      '/api/v1/submissions/submission-1/peer-reviews',
+    );
   });
 
   test('contextual analysis includes learning path and task day', () async {

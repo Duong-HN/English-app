@@ -32,7 +32,7 @@ void main() {
         if (request.method == 'GET' &&
             request.url.path == '/api/v1/onboarding') {
           return jsonResponse(
-                onboardingCompleted
+            onboardingCompleted
                 ? {
                     'status': 'completed',
                     'goal': 'ielts',

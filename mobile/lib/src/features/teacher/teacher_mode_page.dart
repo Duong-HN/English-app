@@ -6,6 +6,7 @@ import '../../core/app_config.dart';
 import '../settings/notifications_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/learnmate_top_bar.dart';
+import '../groups/study_groups_page.dart';
 
 class TeacherModePage extends StatelessWidget {
   const TeacherModePage({
@@ -142,6 +143,20 @@ class TeacherModePage extends StatelessWidget {
                   authController.setActiveMode(AuthController.learnerMode),
               icon: const Icon(Icons.menu_book_outlined),
               label: const Text('Chuyển sang chế độ học viên'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const Key('open-collaborative-groups'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => StudyGroupsPage(
+                    apiClient: authController.apiClient,
+                    authController: authController,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.forum_outlined),
+              label: const Text('Mở nhóm học tập cộng tác'),
             ),
           ],
         ),

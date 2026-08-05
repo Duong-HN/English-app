@@ -1,5 +1,7 @@
 # Plan 2 — Teacher mode mobile và Teacher Dashboard web
 
+> Cập nhật 2026-08-05: đây là kế hoạch legacy cho mô hình lớp do giáo viên quản lý. Actor cộng tác chính hiện tại là **User trong Study Group**; xem [docs/STUDY_GROUPS.md](docs/STUDY_GROUPS.md). Teacher Dashboard và các API lớp cũ vẫn được giữ để tương thích.
+
 **Trạng thái:** MVP đã triển khai trên nhánh `feat/teacher-dashboard-handoff`, chờ review
 **Quyết định đề xuất:** Giữ kiến trúc hiện tại: mobile là Learner space và điểm truy cập Teacher mode; các thao tác quản lý giáo viên đầy đủ nằm trên Teacher Dashboard web.
 

@@ -503,6 +503,145 @@ class ClassListResponse(BaseModel):
     total: int
 
 
+class StudyGroupCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=2000)
+    level: LearningLevel | None = None
+
+    @field_validator("name", "description")
+    @classmethod
+    def clean_group_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("value must contain non-whitespace characters")
+        return cleaned
+
+
+class StudyGroupJoinRequest(BaseModel):
+    invite_code: str = Field(min_length=6, max_length=24)
+
+    @field_validator("invite_code")
+    @classmethod
+    def normalize_group_invite_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class StudyGroupResponse(BaseModel):
+    id: str
+    owner_id: str
+    owner_name: str
+    name: str
+    description: str | None
+    level: LearningLevel | None
+    invite_code: str | None
+    member_count: int
+    is_owner: bool
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class StudyGroupListResponse(BaseModel):
+    items: list[StudyGroupResponse]
+    total: int
+
+
+class StudyGroupMemberResponse(BaseModel):
+    id: str
+    user_id: str
+    email: EmailStr
+    display_name: str
+    level: str | None
+    is_owner: bool
+    joined_at: datetime
+
+
+class StudyGroupMemberListResponse(BaseModel):
+    items: list[StudyGroupMemberResponse]
+    total: int
+
+
+class StudyGroupAssignmentResponse(BaseModel):
+    id: str
+    group_id: str
+    group_name: str
+    created_by_id: str
+    created_by_name: str
+    title: str
+    skill: AnalysisType
+    content: str
+    estimated_minutes: int
+    due_at: datetime
+    created_at: datetime
+    updated_at: datetime | None
+    submission_id: str | None = None
+    submission_status: str | None = None
+    peer_review_count: int = 0
+
+
+class StudyGroupAssignmentListResponse(BaseModel):
+    items: list[StudyGroupAssignmentResponse]
+    total: int
+
+
+class PeerReviewCreateRequest(BaseModel):
+    score: float = Field(ge=0, le=10)
+    feedback: str = Field(min_length=3, max_length=4000)
+
+    @field_validator("feedback")
+    @classmethod
+    def clean_peer_feedback(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("feedback must contain at least 3 non-whitespace characters")
+        return cleaned
+
+
+class PeerReviewResponse(BaseModel):
+    id: str
+    submission_id: str
+    reviewer_id: str
+    reviewer_name: str
+    score: float
+    feedback: str
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class PeerReviewTargetResponse(BaseModel):
+    submission_id: str
+    assignment_id: str
+    assignment_title: str
+    author_id: str
+    author_name: str
+    input_text: str
+    analysis: AnalysisResponse | None
+    submitted_at: datetime
+
+
+class PeerReviewQueueResponse(BaseModel):
+    items: list[PeerReviewTargetResponse]
+    total: int
+
+
+class LeaderboardEntryResponse(BaseModel):
+    rank: int
+    user_id: str
+    display_name: str
+    level: LearningLevel | None
+    points: int
+    submissions_count: int
+    peer_reviews_count: int
+    average_review_score: float | None
+
+
+class LeaderboardResponse(BaseModel):
+    level: LearningLevel | None
+    items: list[LeaderboardEntryResponse]
+    total: int
+
+
 class ClassMemberResponse(BaseModel):
     id: str
     learner_id: str

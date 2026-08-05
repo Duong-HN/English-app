@@ -1,10 +1,10 @@
 # Luồng hoạt động LearnMate
 
-Tài liệu này mô tả ba không gian sản phẩm chính:
+Tài liệu này mô tả không gian sản phẩm mới và luồng tương thích:
 
-1. **Mobile Learner** — nơi học viên học, luyện tập và nhận bài từ lớp.
-2. **Mobile Teacher** — điểm chuyển chế độ và handoff sang web cho giáo viên đã được duyệt.
-3. **Web Dashboard** — không gian làm việc đầy đủ cho teacher và admin.
+1. **Mobile User** — nơi người dùng học, tạo nhóm, làm bài và peer review.
+2. **Mobile Teacher legacy** — điểm chuyển chế độ và handoff sang web cho giáo viên đã được duyệt.
+3. **Web Dashboard** — không gian tương thích cho teacher và admin.
 
 ## Quy ước trạng thái
 
@@ -33,7 +33,22 @@ admin    → Admin Dashboard web
 
 ---
 
-# 1. Mobile Learner
+# 1. Mobile User và nhóm học tập
+
+### ✅ Actor cộng tác hiện có
+
+```text
+User → tạo nhóm / nhập mã mời
+User → tạo bài tập chung
+User → nộp bài
+User → peer review bài của thành viên khác
+User → xem leaderboard theo cấp độ A1–C1
+```
+
+Chi tiết API và công thức điểm được ghi trong [Nhóm học tập cộng tác](STUDY_GROUPS.md). Luồng Teacher bên dưới chỉ là
+compatibility flow cho các lớp đã tạo theo mô hình cũ.
+
+# 2. Mobile Learner legacy
 
 ## 1.1. Điều hướng
 

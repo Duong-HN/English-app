@@ -2,6 +2,12 @@
 
 All notable changes to LearnMate AI are recorded here.
 
+## 2026-08-05 — Collaborative study groups
+
+- Added user-created study groups with invite codes, member-created shared assignments, peer-review queues and level-based leaderboards.
+- Added peer-review persistence and migrations `0016`–`0018`; legacy teacher classes remain isolated from collaborative groups.
+- Added mobile entry points for creating/joining groups, shared work, peer review and group rankings.
+
 ## Unreleased
 
 ### Added

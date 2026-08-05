@@ -422,6 +422,104 @@ class ApiClient {
     return _get('/api/v1/assignments/$assignmentId/submission');
   }
 
+  Future<List<Map<String, dynamic>>> studyGroups() async {
+    final payload = await _get('/api/v1/study-groups');
+    return _mapItems(payload, const ['items', 'groups', 'data']);
+  }
+
+  Future<Map<String, dynamic>> createStudyGroup({
+    required String name,
+    String? description,
+    String? level,
+  }) {
+    return _post(
+      '/api/v1/study-groups',
+      body: {
+        'name': name.trim(),
+        ...?(description == null || description.trim().isEmpty
+            ? null
+            : {'description': description.trim()}),
+        ...?(level == null || level.trim().isEmpty ? null : {'level': level}),
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> joinStudyGroup(String inviteCode) {
+    return _post(
+      '/api/v1/study-groups/join',
+      body: {'invite_code': inviteCode.trim()},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> studyGroupAssignments(
+    String groupId,
+  ) async {
+    final payload = await _get('/api/v1/study-groups/$groupId/assignments');
+    return _mapItems(payload, const ['items', 'assignments', 'data']);
+  }
+
+  Future<Map<String, dynamic>> createStudyGroupAssignment({
+    required String groupId,
+    required String title,
+    required String skill,
+    required String content,
+    required int estimatedMinutes,
+    required DateTime dueAt,
+  }) {
+    return _post(
+      '/api/v1/study-groups/$groupId/assignments',
+      body: {
+        'title': title.trim(),
+        'skill': skill,
+        'content': content.trim(),
+        'estimated_minutes': estimatedMinutes,
+        'due_at': dueAt.toUtc().toIso8601String(),
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> peerReviewQueue({
+    required String groupId,
+    required String assignmentId,
+  }) async {
+    final payload = await _get(
+      '/api/v1/study-groups/$groupId/assignments/$assignmentId/peer-reviews',
+    );
+    return _mapItems(payload, const ['items', 'data']);
+  }
+
+  Future<Map<String, dynamic>> createPeerReview({
+    required String submissionId,
+    required double score,
+    required String feedback,
+  }) {
+    return _post(
+      '/api/v1/submissions/$submissionId/peer-reviews',
+      body: {'score': score, 'feedback': feedback.trim()},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> studyGroupLeaderboard(
+    String groupId, {
+    String? level,
+  }) async {
+    final suffix = level == null || level.isEmpty
+        ? ''
+        : '?level=${Uri.encodeQueryComponent(level)}';
+    final payload = await _get(
+      '/api/v1/study-groups/$groupId/leaderboard$suffix',
+    );
+    return _mapItems(payload, const ['items', 'data']);
+  }
+
+  Future<List<Map<String, dynamic>>> leaderboard({String? level}) async {
+    final suffix = level == null || level.isEmpty
+        ? ''
+        : '?level=${Uri.encodeQueryComponent(level)}';
+    final payload = await _get('/api/v1/leaderboards$suffix');
+    return _mapItems(payload, const ['items', 'data']);
+  }
+
   Future<Map<String, dynamic>> lookupWord(String word) {
     final encodedWord = Uri.encodeComponent(word.trim());
     return _get('/api/v1/vocabulary/lookup/$encodedWord');

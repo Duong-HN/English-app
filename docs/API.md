@@ -202,6 +202,13 @@ Skills are limited to `reading`, `writing` and `speaking`; deadlines must be fut
 late submission is rejected. Resubmission updates the same submission and analysis records, so retries do not create
 duplicate work. AI output is nested under `analysis`; feedback is submitted as `{ "feedback": "..." }`.
 
+## Collaborative study groups
+
+Study groups are the primary peer-learning actor model. Both `learner` and `teacher` accounts can create or join a group;
+the legacy teacher class endpoints remain available for backwards compatibility. See [Study groups](STUDY_GROUPS.md) for the
+full flow. The group APIs support invite codes, member-created assignments, peer-review queues, one review per reviewer per
+submission and leaderboards filtered by `A1`, `A2`, `B1`, `B2` or `C1`.
+
 ## Learner home
 
 - `GET /home` — returns the active self-study or class space.

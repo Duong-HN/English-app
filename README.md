@@ -15,13 +15,14 @@ SQLite, Mock AI, local media storage and HTTP localhost/LAN endpoints are develo
 - Email/password registration and JWT login.
 - Secure token storage on the device.
 - Resumable learner onboarding with goal, daily-time preferences and a server-scored 20-question placement test.
-- Onboarding choice between self-study and joining a teacher's class; the active space can be changed in Settings.
+- Onboarding choice between self-study and joining a class; the active space can be changed in Settings.
 - API-enforced space-scoped isolation for learner level, placement, path, analysis, vocabulary and lesson progress in the prototype flows.
 - Fixed level/chapter curriculum, four IELTS band tracks (4.5–8.0), and a lesson library API with progress tracking.
 - Real lesson media pipeline: admin uploads licensed audio/video or registers a hosted URL; mobile plays it with
   authenticated streaming, transcript/caption and resumable media progress.
 - Home dashboard scoped to the active space: self-study shows the personal course/path, class mode shows teacher work.
 - Teacher role with class invite codes, assignments, AI-assisted submissions and teacher feedback.
+- Collaborative study groups for all learners: create/invite members, shared assignments, peer review and level-based leaderboards.
 - Structured English A2-to-B1 content pack with six original lessons, practice activities, answer keys and provenance metadata.
 - Teacher mode on mobile is a compact overview; full class management remains in the responsive Teacher Dashboard web portal.
 - Administrator RBAC, account moderation and append-only application audit records.
@@ -98,12 +99,13 @@ flutter run -d chrome `
 
 Camera OCR is mobile-only. For an Android emulator the default API URL is `http://10.0.2.2:8000`. For a physical phone, pass the computer's LAN address with `--dart-define` and ensure the backend listens on `0.0.0.0`.
 
-Teacher mode opens the responsive Teacher Dashboard in the device's external
+Legacy teacher mode opens the responsive Teacher Dashboard in the device's external
 browser and uses a separate web login/session. Set
 `TEACHER_DASHBOARD_URL` to a LAN, staging or production URL as appropriate;
 staging and production must use HTTPS. No mobile token is appended to this URL.
 
-On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. Self-study
+On first use, the mobile app asks whether the learner wants self-study or to join a class with an invite code. From the
+Lớp học screen, users can also open Nhóm học tập to create or join a collaborative group. Self-study
 then resumes through goal, daily time, placement and path creation; class mode opens teacher-assigned work immediately.
 Settings can switch between self-study and every joined class. The fixed curriculum is separate from the seven-day
 personal task plan. Mock mode is deterministic for local testing; Gemini can generate the same validated structures when enabled.
@@ -116,7 +118,8 @@ npm install
 npm run dev
 ```
 
-Public registration creates learners. A learner can submit a teacher application from mobile Cài đặt; an administrator reviews it in the Hồ sơ giáo viên section. Approved accounts keep the same data and can switch between learner and teacher mode from Cài đặt: the mobile app remains the learner space while the web portal creates classes, shares invite codes, assigns work and reviews submissions.
+Public registration creates learners. A learner can create or join study groups immediately. The older teacher application
+and Teacher Dashboard flow remains available for legacy teacher-led classes.
 
 Create the first administrator from `backend` with `ADMIN_PASSWORD` and the `create-admin` CLI. Public registration intentionally creates learner accounts only.
 

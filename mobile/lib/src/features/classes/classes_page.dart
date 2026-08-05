@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
 import '../../core/auth_controller.dart';
+import '../groups/study_groups_page.dart';
 
 class ClassesPage extends StatefulWidget {
   const ClassesPage({super.key, required this.apiClient, this.authController});
@@ -192,6 +193,22 @@ class ClassesPageState extends State<ClassesPage> {
                     .toList(),
               );
             },
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            key: const Key('open-study-groups'),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => StudyGroupsPage(
+                    apiClient: widget.apiClient,
+                    authController: widget.authController,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.forum_outlined),
+            label: const Text('Mở nhóm học tập cộng tác'),
           ),
         ],
       ),

@@ -359,6 +359,8 @@ class Classroom(Base):
     teacher_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    level: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    is_study_group: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     invite_code: Mapped[str] = mapped_column(String(24), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -438,6 +440,39 @@ class AssignmentSubmission(Base):
     assignment: Mapped[Assignment] = relationship(back_populates="submissions")
     learner: Mapped[User] = relationship(back_populates="assignment_submissions")
     analysis: Mapped[Analysis | None] = relationship()
+    peer_reviews: Mapped[list[PeerReview]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+    )
+
+
+class PeerReview(Base):
+    """A review written by one member for another member's submission."""
+
+    __tablename__ = "peer_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "submission_id",
+            "reviewer_id",
+            name="uq_peer_review_submission_reviewer",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("assignment_submissions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    reviewer_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    score: Mapped[float] = mapped_column(Float)
+    feedback: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submission: Mapped[AssignmentSubmission] = relationship(back_populates="peer_reviews")
+    reviewer: Mapped[User] = relationship(foreign_keys=[reviewer_id])
 
 
 class VocabularyItem(Base):
